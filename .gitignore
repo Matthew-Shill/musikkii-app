@@ -4,3 +4,6 @@ dist
 *.local
 .env
 .env.*.local
+
+# Supabase CLI (linked project metadata; never commit secrets)
+.supabase
