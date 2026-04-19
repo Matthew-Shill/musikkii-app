@@ -1,8 +1,10 @@
-import { Settings, User, Bell, Lock, Globe, HelpCircle, Users, CreditCard, Target, DollarSign, Building2 } from 'lucide-react';
+import { Settings, User, Bell, Lock, Globe, HelpCircle, Users, CreditCard, Target, DollarSign, Building2, LogOut } from 'lucide-react';
 import { useRole } from '../../context/role-context';
+import { useAuthSession } from '../../context/auth-session-context';
 
 export function SettingsPage() {
   const { roleFamily } = useRole();
+  const { isConfigured, user, profile, profileError, signOut } = useAuthSession();
 
   return (
     <div className="p-8 space-y-6 max-w-4xl mx-auto">
@@ -25,6 +27,25 @@ export function SettingsPage() {
         </div>
 
         <div className="space-y-3">
+          {isConfigured && user && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+              <p className="font-medium text-gray-900">Signed in</p>
+              <p className="mt-1">{user.email}</p>
+              {profile?.full_name && <p className="mt-0.5">{profile.full_name}</p>}
+              {profile?.app_role && (
+                <p className="mt-1 text-xs text-gray-500">App role (database): {profile.app_role}</p>
+              )}
+              {profileError && <p className="mt-2 text-xs text-amber-700">Profile could not be loaded: {profileError}</p>}
+              <button
+                type="button"
+                onClick={() => void signOut()}
+                className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-red-700 hover:text-red-800"
+              >
+                <LogOut className="w-4 h-4" />
+                Sign out
+              </button>
+            </div>
+          )}
           <button className="w-full py-3 px-4 text-left rounded-lg hover:bg-gray-50 transition-colors border border-gray-200">
             <p className="font-medium">Profile Information</p>
             <p className="text-sm text-gray-600 mt-1">Update your name, email, and profile picture</p>

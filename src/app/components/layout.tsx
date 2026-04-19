@@ -1,4 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router';
+import { useAuthSession } from '../context/auth-session-context';
 import {
   Bell,
   User,
@@ -26,7 +27,8 @@ const roleOptions: Array<{ value: UserRole; label: string }> = [
 
 export function Layout() {
   const location = useLocation();
-  const { role, setRole, roleLabel, roleFamily } = useRole();
+  const { role, setRole, roleLabel } = useRole();
+  const { isConfigured, session, loading: authLoading } = useAuthSession();
   const { hasPermission } = usePermissions();
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -221,6 +223,15 @@ export function Layout() {
           </div>
 
           <div className="flex items-center gap-2 md:gap-4">
+            {isConfigured && !authLoading && !session && (
+              <Link
+                to="/sign-in"
+                state={{ from: location.pathname }}
+                className="text-sm font-medium px-3 py-2 rounded-lg hover:bg-gray-100 text-blue-600"
+              >
+                Sign in
+              </Link>
+            )}
             <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors relative">
               <Bell className="w-5 h-5 text-gray-600" />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--musikkii-blue)' }} />

@@ -1,5 +1,6 @@
-import { Link, useLocation } from 'react-router';
+import { Link, Navigate, useLocation } from 'react-router';
 import { useRole } from '../context/role-context';
+import { useAuthSession } from '../context/auth-session-context';
 import { hasRouteAccess } from '../config/route-permissions';
 import { ShieldAlert } from 'lucide-react';
 
@@ -17,8 +18,21 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { roleFamily } = useRole();
   const location = useLocation();
+  const { isConfigured, session, loading } = useAuthSession();
 
-  // Check if current role family has access to this route
+  if (isConfigured && loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[40vh] px-4">
+        <p className="text-sm text-gray-600">Loading session…</p>
+      </div>
+    );
+  }
+
+  if (isConfigured && !session) {
+    return <Navigate to="/sign-in" replace state={{ from: location.pathname }} />;
+  }
+
+  // Check if current role family has access to this route (UI preview role until wired to profile)
   const hasAccess = hasRouteAccess(roleFamily, location.pathname);
 
   if (!hasAccess) {

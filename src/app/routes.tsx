@@ -17,6 +17,7 @@ import { TeachersPage } from "./components/pages/teachers-page";
 import { UsersPage } from "./components/pages/users-page";
 import { OperationsPage } from "./components/pages/operations-page";
 import { ReportsPage } from "./components/pages/reports-page";
+import { SignInPage } from "./components/pages/sign-in-page";
 
 // Helper to wrap components with ProtectedRoute
 const withProtection = (Component: ComponentType) => {
@@ -28,6 +29,7 @@ const withProtection = (Component: ComponentType) => {
 };
 
 export const router = createBrowserRouter([
+  { path: "/sign-in", Component: SignInPage },
   {
     path: "/",
     Component: Layout,
