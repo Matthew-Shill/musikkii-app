@@ -1,7 +1,12 @@
-export function Logo({ className = "h-10" }: { className?: string }) {
+import musikkiiLogo from '@/assets/musikkii-logo.svg';
+
+export function Logo({ className = 'h-10' }: { className?: string }) {
   return (
-    <div className={`font-bold text-2xl ${className}`} style={{ color: 'var(--musikkii-blue)' }}>
-      Musikkii
-    </div>
+    <img
+      src={musikkiiLogo}
+      alt="Musikkii"
+      className={`block w-auto max-w-full object-contain object-left ${className}`}
+      draggable={false}
+    />
   );
 }
