@@ -7,7 +7,9 @@
     "build": "vite build",
     "dev": "vite",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "seed:dev-users": "node --import tsx ./scripts/seed-dev-test-users.ts",
+    "seed:sync-env": "node --import tsx ./scripts/sync-seeding-env-from-status.ts"
   },
   "dependencies": {
     "react": "18.3.1",
@@ -70,6 +72,8 @@
     "vaul": "1.1.2"
   },
   "devDependencies": {
+    "dotenv": "^16.5.0",
+    "tsx": "^4.19.3",
     "@tailwindcss/vite": "4.1.12",
     "@types/node": "^22.14.0",
     "@types/react": "^18.3.12",

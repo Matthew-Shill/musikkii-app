@@ -3,8 +3,8 @@ import { useRole } from '../../context/role-context';
 import { useAuthSession } from '../../context/auth-session-context';
 
 export function SettingsPage() {
-  const { roleFamily } = useRole();
-  const { isConfigured, user, profile, profileError, signOut } = useAuthSession();
+  const { roleFamily, role, isDevRoleOverrideActive, clearDevRoleOverride } = useRole();
+  const { isConfigured, user, profile, profileError, signOut, resolvedAppRole } = useAuthSession();
 
   return (
     <div className="p-8 space-y-6 max-w-4xl mx-auto">
@@ -34,6 +34,25 @@ export function SettingsPage() {
               {profile?.full_name && <p className="mt-0.5">{profile.full_name}</p>}
               {profile?.app_role && (
                 <p className="mt-1 text-xs text-gray-500">App role (database): {profile.app_role}</p>
+              )}
+              <p className="mt-1 text-xs text-gray-500">
+                Effective role (nav &amp; mocks): <span className="font-medium text-gray-800">{role}</span>
+              </p>
+              {isDevRoleOverrideActive && (
+                <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                  <p className="font-medium">Developer role override is on</p>
+                  <p className="mt-1 text-amber-900">
+                    The header role switcher is simulating another role. Clear it to use your database role
+                    {resolvedAppRole ? ` (${resolvedAppRole})` : profile?.app_role ? ` (${profile.app_role})` : ''}.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={clearDevRoleOverride}
+                    className="mt-2 text-sm font-semibold text-amber-950 underline"
+                  >
+                    Clear override
+                  </button>
+                </div>
               )}
               {profileError && <p className="mt-2 text-xs text-amber-700">Profile could not be loaded: {profileError}</p>}
               <button

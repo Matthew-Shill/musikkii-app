@@ -1,18 +1,21 @@
 import { useAuthSession } from '../context/auth-session-context';
+import { useRole } from '../context/role-context';
 
 /**
- * Server-backed profile + parsed `app_role` for the signed-in user.
- * UI role switching (`useRole`) remains separate until product wiring replaces mocks.
+ * Combines database profile data with the **effective** `useRole().role`
+ * (database `app_role` when signed in, unless a session dev override is active).
  */
 export function useProfileRoleResolution() {
-  const { profile, resolvedAppRole, profileLoading, profileError, refreshProfile } = useAuthSession();
+  const auth = useAuthSession();
+  const { role: effectiveRole, isDevRoleOverrideActive } = useRole();
 
   return {
-    profile,
-    /** Canonical role from `public.profiles.app_role` when valid */
-    appRoleFromProfile: resolvedAppRole,
-    profileLoading,
-    profileError,
-    refreshProfile,
+    profile: auth.profile,
+    appRoleFromProfile: auth.resolvedAppRole,
+    effectiveRole,
+    isDevRoleOverrideActive,
+    profileLoading: auth.profileLoading,
+    profileError: auth.profileError,
+    refreshProfile: auth.refreshProfile,
   };
 }

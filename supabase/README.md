@@ -36,3 +36,14 @@ supabase db reset
 ```
 
 The Vite app reads **`VITE_SUPABASE_URL`** and **`VITE_SUPABASE_ANON_KEY`** from `.env` (see `.env.example` in the repo root). Those point at hosted or local API depending on how you develop.
+
+## Local dev test users
+
+With **`supabase start`** running, from the repo root:
+
+```bash
+npm run seed:sync-env   # writes .env.seeding.local from `supabase status` (no manual paste)
+npm run seed:dev-users  # creates test Auth users + profiles
+```
+
+See [`docs/testing/test-accounts.md`](../docs/testing/test-accounts.md). **Never** use the service role key in the browser or ship it to production.

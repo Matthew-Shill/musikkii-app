@@ -9,6 +9,8 @@ Web-first Vite + React dashboard for Musikkii.
 - `npm run build` — production build to `dist/`
 - `npm run preview` — serve the production build locally
 - `npm run typecheck` — TypeScript (`tsc --noEmit`)
+- `npm run seed:sync-env` — write **`.env.seeding.local`** from `supabase status` (run after `supabase start`; avoids copy/paste errors)
+- `npm run seed:dev-users` — create/update **local/dev** test users (see [docs/testing/test-accounts.md](./docs/testing/test-accounts.md))
 
 ## Environment
 
@@ -16,7 +18,7 @@ Copy `.env.example` to `.env` and set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANO
 
 ## Supabase
 
-Database migrations and CLI config live in [`supabase/`](./supabase/README.md). The browser client is [`src/lib/supabase.ts`](./src/lib/supabase.ts) (not wired into routes yet).
+Database migrations and CLI config live in [`supabase/`](./supabase/README.md). The browser client is [`src/lib/supabase.ts`](./src/lib/supabase.ts); session and profile loading live in `AuthSessionProvider`.
 
 ## Documentation
 
