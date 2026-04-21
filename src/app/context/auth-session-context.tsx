@@ -27,6 +27,13 @@ export interface AuthSessionContextValue {
   profileError: string | null;
   /** `profiles.app_role` parsed to `UserRole`; null if missing/invalid */
   resolvedAppRole: UserRole | null;
+  /**
+   * Signed-in + Supabase configured, profile fetch finished, and `resolvedAppRole` is set.
+   * Used to avoid treating the anonymous preview role as real for nav/RBAC.
+   */
+  accountRoleReady: boolean;
+  /** Signed in, profile fetch finished, but no usable `app_role` (missing row, RLS block, or invalid value). */
+  accountRoleInvalid: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -43,6 +50,7 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
   const [profileError, setProfileError] = useState<string | null>(null);
 
   const loadProfile = useCallback(async (uid: string) => {
+    setProfile((prev) => (prev && prev.id !== uid ? null : prev));
     setProfileLoading(true);
     setProfileError(null);
     const { data, error } = await supabase
@@ -120,6 +128,19 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
     [profile?.app_role]
   );
 
+  const accountRoleReady = useMemo(() => {
+    if (!isConfigured || !session) return true;
+    if (profileLoading && profile !== null) return true;
+    if (profileLoading) return false;
+    return resolvedAppRole !== null;
+  }, [isConfigured, session, profileLoading, profile, resolvedAppRole]);
+
+  const accountRoleInvalid = useMemo(() => {
+    if (!isConfigured || !session) return false;
+    if (profileLoading) return false;
+    return resolvedAppRole === null;
+  }, [isConfigured, session, profileLoading, resolvedAppRole]);
+
   const value = useMemo<AuthSessionContextValue>(
     () => ({
       isConfigured,
@@ -130,6 +151,8 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
       profileLoading,
       profileError,
       resolvedAppRole,
+      accountRoleReady,
+      accountRoleInvalid,
       signOut,
       refreshProfile,
     }),
@@ -142,6 +165,8 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
       profileLoading,
       profileError,
       resolvedAppRole,
+      accountRoleReady,
+      accountRoleInvalid,
       signOut,
       refreshProfile,
     ]

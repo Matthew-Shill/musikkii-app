@@ -1,8 +1,9 @@
-import { Link, Navigate, useLocation } from 'react-router';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { useRole } from '../context/role-context';
 import { useAuthSession } from '../context/auth-session-context';
 import { hasRouteAccess } from '../config/route-permissions';
 import { ShieldAlert } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -18,7 +19,14 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { roleFamily } = useRole();
   const location = useLocation();
-  const { isConfigured, session, loading } = useAuthSession();
+  const {
+    isConfigured,
+    session,
+    loading,
+    profileLoading,
+    resolvedAppRole,
+    profileError,
+  } = useAuthSession();
 
   if (isConfigured && loading) {
     return (
@@ -32,7 +40,19 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     return <Navigate to="/sign-in" replace state={{ from: location.pathname }} />;
   }
 
-  // Check if current role family has access to this route (UI preview role until wired to profile)
+  if (isConfigured && session) {
+    if (profileLoading) {
+      return (
+        <div className="flex items-center justify-center min-h-[40vh] px-4">
+          <p className="text-sm text-gray-600">Loading profile…</p>
+        </div>
+      );
+    }
+    if (resolvedAppRole === null) {
+      return <ProfileIncomplete detail={profileError} />;
+    }
+  }
+
   const hasAccess = hasRouteAccess(roleFamily, location.pathname);
 
   if (!hasAccess) {
@@ -52,6 +72,41 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
  *
  * Displayed when a user attempts to access a route they don't have permission for.
  */
+function ProfileIncomplete({ detail }: { detail: string | null }) {
+  const navigate = useNavigate();
+
+  return (
+    <div className="flex items-center justify-center p-8 py-24 px-4">
+      <div className="max-w-md w-full text-center">
+        <div className="w-20 h-20 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-6">
+          <ShieldAlert className="w-10 h-10 text-amber-700" />
+        </div>
+        <h1 className="text-2xl font-bold mb-3">Profile not ready</h1>
+        <p className="text-gray-600 mb-4">
+          You are signed in, but this app could not read a valid <code className="text-sm bg-gray-100 px-1 rounded">app_role</code> from{' '}
+          <code className="text-sm bg-gray-100 px-1 rounded">public.profiles</code> for your account. Seeded dev users need a profile row (run{' '}
+          <code className="text-sm bg-gray-100 px-1 rounded">npm run seed:dev-users</code>).
+        </p>
+        {detail ? (
+          <p className="text-sm text-red-600 mb-6 break-words" role="status">
+            {detail}
+          </p>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => {
+            void supabase.auth.signOut().then(() => navigate('/sign-in', { replace: true }));
+          }}
+          className="px-6 py-3 rounded-lg font-medium text-white hover:opacity-90 transition-opacity"
+          style={{ backgroundColor: 'var(--musikkii-blue)' }}
+        >
+          Sign out
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AccessDenied() {
   const { roleFamily } = useRole();
 

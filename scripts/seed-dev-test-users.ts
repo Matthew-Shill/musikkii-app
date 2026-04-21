@@ -6,7 +6,7 @@
  *   2. `.env.seeding.local` — SUPABASE_SERVICE_ROLE_KEY from `supabase status` (see .env.seeding.example).
  *   3. npm run seed:dev-users
  *
- * Never run against production with real user data. Password is fake and documented in docs/testing/test-accounts.md
+ * Never run against production with real user data. Password: `DEV_SEED_PASSWORD` / `VITE_DEV_SEED_PASSWORD` or default in docs/testing/test-accounts.md
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -123,8 +123,10 @@ function assertPlausibleServiceRoleKey(secret: string) {
   process.exit(1);
 }
 
-/** LOCAL DEV ONLY — same value documented in docs/testing/test-accounts.md */
-const DEV_PASSWORD = 'LocalDev-ONLY-2026-Musikkii!';
+/** LOCAL DEV ONLY — override with `DEV_SEED_PASSWORD` or `VITE_DEV_SEED_PASSWORD` in `.env` / `.env.local`. */
+const DEFAULT_DEV_PASSWORD = 'LocalDev-ONLY-2026-Musikkii!';
+const DEV_PASSWORD =
+  pickEnv('DEV_SEED_PASSWORD', 'VITE_DEV_SEED_PASSWORD') ?? DEFAULT_DEV_PASSWORD;
 
 const ACCOUNTS = [
   { email: 'adult-student.dev@musikkii.test', app_role: 'adult-student', full_name: 'Dev Adult Student' },

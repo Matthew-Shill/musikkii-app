@@ -17,6 +17,7 @@ import { TeachersPage } from "./components/pages/teachers-page";
 import { UsersPage } from "./components/pages/users-page";
 import { OperationsPage } from "./components/pages/operations-page";
 import { ReportsPage } from "./components/pages/reports-page";
+import { TeacherAvailabilityPage } from "./components/pages/teacher-availability-page";
 import { SignInPage } from "./components/pages/sign-in-page";
 
 // Helper to wrap components with ProtectedRoute
@@ -34,7 +35,7 @@ export const router = createBrowserRouter([
     path: "/",
     Component: Layout,
     children: [
-      { index: true, Component: DashboardPage }, // Dashboard is accessible to all
+      { index: true, Component: withProtection(DashboardPage) },
       { path: "calendar", Component: withProtection(CalendarPage) },
       { path: "practice", Component: withProtection(PracticePage) },
       { path: "practice-insights", Component: withProtection(PracticeInsightsPage) },
@@ -49,6 +50,7 @@ export const router = createBrowserRouter([
       { path: "users", Component: withProtection(UsersPage) },
       { path: "operations", Component: withProtection(OperationsPage) },
       { path: "reports", Component: withProtection(ReportsPage) },
+      { path: "teacher-availability", Component: withProtection(TeacherAvailabilityPage) },
     ],
   },
 ]);

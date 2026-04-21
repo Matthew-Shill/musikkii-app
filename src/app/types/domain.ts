@@ -69,6 +69,10 @@ export interface Lesson {
   recordingUrl?: string;
   focus?: string;
   createdAt: Date;
+  /** From `lessons → teachers → profiles` when RLS allows (calendar / lists). */
+  teacherDisplayName?: string;
+  /** From `lesson_participants → students → profiles` when RLS allows. */
+  studentDisplayName?: string;
 }
 
 export interface LessonActionAvailability {

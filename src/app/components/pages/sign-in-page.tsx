@@ -2,6 +2,7 @@ import { useState, useEffect, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Logo } from '../shared/logo';
+import { DevAccountSwitcherGate } from '../../dev/DevAccountSwitcherGate';
 
 export function SignInPage() {
   const navigate = useNavigate();
@@ -115,6 +116,8 @@ export function SignInPage() {
             Return to dashboard
           </Link>
         </p>
+
+        {configured ? <DevAccountSwitcherGate /> : null}
       </div>
     </div>
   );

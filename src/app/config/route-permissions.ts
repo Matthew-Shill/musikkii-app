@@ -22,7 +22,8 @@ export type RoutePath =
   | '/teachers'
   | '/users'
   | '/operations'
-  | '/reports';
+  | '/reports'
+  | '/teacher-availability';
 
 export interface RoutePermission {
   path: RoutePath;
@@ -98,6 +99,11 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   },
   {
     path: '/reports',
+    allowedFamilies: ['instructor', 'operations', 'leadership'],
+    requiresExact: true,
+  },
+  {
+    path: '/teacher-availability',
     allowedFamilies: ['instructor', 'operations', 'leadership'],
     requiresExact: true,
   },

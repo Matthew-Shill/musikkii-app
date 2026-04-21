@@ -16,7 +16,16 @@ import { Link } from 'react-router';
 import { PracticeStreakWidget } from '../shared/practice-streak-widget';
 import { NextLessonCard } from './widgets/next-lesson-card';
 import type { UserRole } from '../../types/domain';
-import { mockLessons, mockAssignments, mockStreakState } from '../../data/mockData';
+import { mockAssignments, mockStreakState } from '../../data/mockData';
+import { useDashboardLessons } from '@/app/dashboard/hooks/useDashboardLessons';
+import {
+  formatLessonDate,
+  formatLessonTime,
+  formatStatusLabel,
+  initialsFromDisplayName,
+  lessonStatusForUi,
+} from '@/lib/lesson-ui-helpers';
+import { lessonAvatarInitialsSource, lessonPrimaryLabel, lessonTeacherDisplayName } from '@/app/dashboard/lessonDerived';
 
 interface LearnerDashboardProps {
   role: UserRole;
@@ -25,11 +34,14 @@ interface LearnerDashboardProps {
 
 export function LearnerDashboard({ role, userName }: LearnerDashboardProps) {
   const isChild = role === 'child-student';
+  const { lessons, loading: lessonsLoading, error: lessonsError } = useDashboardLessons();
 
-  // Get next upcoming lesson
-  const nextLesson = mockLessons.find(l => l.status === 'scheduled');
+  const nowMs = Date.now();
+  const upcomingLessonRows = lessons.filter((l) => new Date(l.ends_at).getTime() >= nowMs);
+  const nextLessonRow = upcomingLessonRows[0];
+  const laterLessons = upcomingLessonRows.slice(1);
 
-  // Get assignments
+  // Assignments / streak / messages: still prototype data until practice tables are wired.
   const assignments = mockAssignments.slice(0, 4);
 
   return (
@@ -86,19 +98,29 @@ export function LearnerDashboard({ role, userName }: LearnerDashboardProps) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Column */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Next Lesson Card */}
-          {nextLesson && (
+          {lessonsError ? (
+            <p className="text-sm text-red-600" role="alert">
+              {lessonsError}
+            </p>
+          ) : null}
+          {lessonsLoading ? <p className="text-sm text-gray-500">Loading schedule…</p> : null}
+          {nextLessonRow ? (
             <NextLessonCard
-              teacherName={isChild ? 'Ms. Sarah' : 'Piano with Jessica Miller'}
-              teacherInitials={isChild ? 'SJ' : 'JM'}
-              lessonDate={isChild ? 'Today' : 'Today, March 17'}
-              lessonTime={isChild ? '3:30 PM' : '2:00 PM'}
-              lessonFocus={nextLesson.focus}
-              status={nextLesson.status}
-              lessonId={nextLesson.id}
+              teacherName={lessonTeacherDisplayName(nextLessonRow)}
+              teacherInitials={initialsFromDisplayName(lessonAvatarInitialsSource(nextLessonRow))}
+              lessonDate={formatLessonDate(nextLessonRow.starts_at)}
+              lessonTime={formatLessonTime(nextLessonRow.starts_at)}
+              lessonFocus={nextLessonRow.focus ?? undefined}
+              status={lessonStatusForUi(nextLessonRow.status)}
+              lessonId={nextLessonRow.id}
               variant={isChild ? 'child' : 'default'}
             />
-          )}
+          ) : null}
+          {!lessonsLoading && !lessonsError && !nextLessonRow ? (
+            <div className="bg-white rounded-xl p-6 border border-gray-200 text-sm text-gray-600">
+              No upcoming lessons yet.
+            </div>
+          ) : null}
 
           {/* Assignments/Practice Tasks */}
           <div className={`bg-white rounded-xl p-6 border border-gray-200 shadow-sm ${isChild ? 'rounded-2xl' : ''}`}>
@@ -177,24 +199,32 @@ export function LearnerDashboard({ role, userName }: LearnerDashboardProps) {
             <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
               <h2 className="text-xl font-semibold mb-4">Upcoming Lessons</h2>
               <div className="space-y-3">
-                {[
-                  { date: 'March 20, 2:00 PM', teacher: 'Jessica Miller', status: 'scheduled' },
-                  { date: 'March 24, 2:00 PM', teacher: 'Jessica Miller', status: 'scheduled' },
-                  { date: 'March 27, 2:00 PM', teacher: 'Jessica Miller', status: 'scheduled' }
-                ].map((lesson, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <Clock className="w-5 h-5 text-gray-400" />
-                      <div>
-                        <p className="font-medium">{lesson.date}</p>
-                        <p className="text-sm text-gray-600">{lesson.teacher}</p>
+                {laterLessons.length === 0 ? (
+                  <p className="text-sm text-gray-500">No further lessons scheduled.</p>
+                ) : (
+                  laterLessons.map((lesson) => {
+                    const uiStatus = lessonStatusForUi(lesson.status);
+                    return (
+                      <div
+                        key={lesson.id}
+                        className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Clock className="w-5 h-5 text-gray-400" />
+                          <div>
+                            <p className="font-medium">
+                              {formatLessonDate(lesson.starts_at)}, {formatLessonTime(lesson.starts_at)}
+                            </p>
+                            <p className="text-sm text-gray-600">{lessonPrimaryLabel(lesson)}</p>
+                          </div>
+                        </div>
+                        <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
+                          {formatStatusLabel(uiStatus)}
+                        </span>
                       </div>
-                    </div>
-                    <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
-                      Scheduled
-                    </span>
-                  </div>
-                ))}
+                    );
+                  })
+                )}
               </div>
             </div>
           )}

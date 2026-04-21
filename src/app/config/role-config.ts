@@ -12,6 +12,7 @@ import {
   DollarSign,
   Building2,
   Activity,
+  Clock,
   type LucideIcon
 } from 'lucide-react';
 import type { UserRole } from '../context/role-context';
@@ -87,6 +88,7 @@ export const ROLE_FAMILIES: Record<RoleFamily, RoleFamilyConfig> = {
     navigation: [
       { name: 'Dashboard', href: '/', icon: LayoutDashboard },
       { name: 'Calendar', href: '/calendar', icon: Calendar },
+      { name: 'Availability', href: '/teacher-availability', icon: Clock },
       { name: 'Students', href: '/students', icon: Users },
       { name: 'Practice Insights', href: '/practice-insights', icon: Activity },
       { name: 'Messages', href: '/messages', icon: MessageSquare },
@@ -107,6 +109,7 @@ export const ROLE_FAMILIES: Record<RoleFamily, RoleFamilyConfig> = {
       { name: 'Calendar', href: '/calendar', icon: Calendar },
       { name: 'Users', href: '/users', icon: Users },
       { name: 'Teachers', href: '/teachers', icon: Users },
+      { name: 'Availability', href: '/teacher-availability', icon: Clock },
       { name: 'Operations', href: '/operations', icon: Settings },
       { name: 'Messages', href: '/messages', icon: MessageSquare },
       { name: 'Billing', href: '/billing', icon: CreditCard },
@@ -126,6 +129,7 @@ export const ROLE_FAMILIES: Record<RoleFamily, RoleFamilyConfig> = {
       { name: 'Calendar', href: '/calendar', icon: Calendar },
       { name: 'Users', href: '/users', icon: Users },
       { name: 'Teachers', href: '/teachers', icon: Users },
+      { name: 'Availability', href: '/teacher-availability', icon: Clock },
       { name: 'Org Overview', href: '/operations', icon: Building2 },
       { name: 'Reports', href: '/reports', icon: BarChart3 },
       { name: 'Messages', href: '/messages', icon: MessageSquare },

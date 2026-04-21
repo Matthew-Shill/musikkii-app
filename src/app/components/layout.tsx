@@ -1,18 +1,25 @@
-import { Outlet, Link, useLocation } from 'react-router';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router';
 import { useAuthSession } from '../context/auth-session-context';
 import {
   Bell,
   User,
   ChevronDown,
   Menu,
-  X
+  X,
+  LayoutDashboard,
+  Settings,
 } from 'lucide-react';
 import { useRole, UserRole } from '../context/role-context';
 import { useState } from 'react';
 import { Logo } from './shared/logo';
-import { getNavigationForRole } from '../config/role-config';
+import { getNavigationForRole, type NavigationItem } from '../config/role-config';
 import { usePermissions } from '../hooks/usePermissions';
-import { getMockUserForRole } from '../data/mockData';
+import { supabase } from '@/lib/supabase';
+
+const NAV_WHILE_ROLE_PENDING: NavigationItem[] = [
+  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Settings', href: '/settings', icon: Settings },
+];
 
 const roleOptions: Array<{ value: UserRole; label: string }> = [
   { value: 'adult-student', label: 'Adult Student' },
@@ -27,17 +34,18 @@ const roleOptions: Array<{ value: UserRole; label: string }> = [
 
 export function Layout() {
   const location = useLocation();
-  const { role, setRole, roleLabel } = useRole();
-  const { isConfigured, session, loading: authLoading } = useAuthSession();
+  const navigate = useNavigate();
+  const { role, setRole } = useRole();
+  const { isConfigured, session, loading: authLoading, profile, user, accountRoleReady } = useAuthSession();
   const { hasPermission } = usePermissions();
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
-  // Get mock user profile for current role
-  const currentUser = getMockUserForRole(role);
+  const displayName = profile?.full_name?.trim() || user?.email?.split('@')[0] || 'Account';
+  const displayEmail = user?.email ?? '';
 
-  // Get navigation for current role from role family config
-  const allNavigationItems = getNavigationForRole(role);
+  const allNavigationItems =
+    isConfigured && session && !accountRoleReady ? NAV_WHILE_ROLE_PENDING : getNavigationForRole(role);
 
   // Filter navigation based on permissions
   const navigation = allNavigationItems.filter(item => {
@@ -91,8 +99,8 @@ export function Layout() {
               <User className="w-5 h-5 text-gray-600" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">{currentUser.name}</p>
-              <p className="text-xs text-gray-500 truncate">{currentUser.email}</p>
+              <p className="text-sm font-medium text-gray-900 truncate">{displayName}</p>
+              <p className="text-xs text-gray-500 truncate">{displayEmail}</p>
             </div>
           </div>
         </div>
@@ -149,8 +157,8 @@ export function Layout() {
                   <User className="w-5 h-5 text-gray-600" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{currentUser.name}</p>
-                  <p className="text-xs text-gray-500 truncate">{currentUser.email}</p>
+                  <p className="text-sm font-medium text-gray-900 truncate">{displayName}</p>
+                  <p className="text-xs text-gray-500 truncate">{displayEmail}</p>
                 </div>
               </div>
             </div>
@@ -175,52 +183,52 @@ export function Layout() {
             <Logo className="h-8" />
           </Link>
 
-          {/* Role Selector - Hidden text on small mobile */}
-          <div className="relative">
-            <button
-              onClick={() => setShowRoleDropdown(!showRoleDropdown)}
-              className="flex items-center gap-2 px-3 md:px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-            >
-              <User className="w-4 h-4 text-gray-600" />
-              <span className="hidden sm:inline text-sm font-medium text-gray-700">
-                <span className="hidden md:inline">Viewing as: </span>
-                <span className="font-semibold">{roleLabel}</span>
-              </span>
-              <ChevronDown className="w-4 h-4 text-gray-500" />
-            </button>
+          {/* Preview role switcher: signed-out or Supabase off only (never when a real session exists). */}
+          {!(isConfigured && session) ? (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowRoleDropdown(!showRoleDropdown)}
+                className="flex items-center gap-2 px-3 md:px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                <User className="w-4 h-4 text-gray-600" />
+                <span className="hidden sm:inline text-sm font-medium text-gray-700">
+                  <span className="hidden md:inline">Preview as: </span>
+                  <span className="font-semibold">{roleOptions.find((o) => o.value === role)?.label ?? role}</span>
+                </span>
+                <ChevronDown className="w-4 h-4 text-gray-500" />
+              </button>
 
-            {/* Role Dropdown */}
-            {showRoleDropdown && (
-              <>
-                <div
-                  className="fixed inset-0 z-10"
-                  onClick={() => setShowRoleDropdown(false)}
-                />
-                <div className="absolute top-full right-0 md:left-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-20">
-                  <div className="px-4 py-2 border-b border-gray-200">
-                    <p className="text-xs font-medium text-gray-500 uppercase">Switch Role</p>
+              {showRoleDropdown && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowRoleDropdown(false)} />
+                  <div className="absolute top-full right-0 md:left-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-20">
+                    <div className="px-4 py-2 border-b border-gray-200">
+                      <p className="text-xs font-medium text-gray-500 uppercase">Preview role</p>
+                    </div>
+                    {roleOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => {
+                          setRole(option.value);
+                          setShowRoleDropdown(false);
+                        }}
+                        className={`w-full text-left px-4 py-2.5 hover:bg-gray-50 transition-colors ${
+                          role === option.value ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
+                        }`}
+                      >
+                        {option.label}
+                        {role === option.value && <span className="ml-2 text-xs">✓</span>}
+                      </button>
+                    ))}
                   </div>
-                  {roleOptions.map((option) => (
-                    <button
-                      key={option.value}
-                      onClick={() => {
-                        setRole(option.value);
-                        setShowRoleDropdown(false);
-                      }}
-                      className={`w-full text-left px-4 py-2.5 hover:bg-gray-50 transition-colors ${
-                        role === option.value ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
-                      }`}
-                    >
-                      {option.label}
-                      {role === option.value && (
-                        <span className="ml-2 text-xs">✓</span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="hidden md:block flex-1" aria-hidden />
+          )}
 
           <div className="flex items-center gap-2 md:gap-4">
             {isConfigured && !authLoading && !session && (
@@ -232,6 +240,19 @@ export function Layout() {
                 Sign in
               </Link>
             )}
+            {import.meta.env.DEV && isConfigured && session ? (
+              <button
+                type="button"
+                onClick={() => {
+                  void supabase.auth.signOut().then(() => {
+                    navigate('/sign-in', { replace: true, state: { from: location.pathname } });
+                  });
+                }}
+                className="text-sm font-medium px-3 py-2 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100"
+              >
+                Sign out
+              </button>
+            ) : null}
             <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors relative">
               <Bell className="w-5 h-5 text-gray-600" />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--musikkii-blue)' }} />

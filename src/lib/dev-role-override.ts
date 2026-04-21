@@ -2,8 +2,8 @@ import type { UserRole } from '@/app/types/domain';
 import { parseAppRoleFromProfile } from '@/lib/resolve-app-role';
 
 /**
- * Session-only storage for a deliberate local/dev role override while signed in.
- * Never used for production behavior decisions outside the browser.
+ * Legacy `sessionStorage` key for a removed “signed-in role override” experiment.
+ * `RoleProvider` clears this on login so old tabs do not retain stale values.
  */
 export const DEV_ROLE_OVERRIDE_STORAGE_KEY = 'musikkii_dev_role_override';
 

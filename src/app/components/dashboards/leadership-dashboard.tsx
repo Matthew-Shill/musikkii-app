@@ -8,8 +8,13 @@ import {
   ArrowDown
 } from 'lucide-react';
 import { Link } from 'react-router';
+import { useDashboardLessons } from '@/app/dashboard/hooks/useDashboardLessons';
+import { lessonsStartingInMonth } from '@/app/dashboard/lessonDerived';
 
 export function LeadershipDashboard() {
+  const { lessons, loading: lessonsLoading, error: lessonsError } = useDashboardLessons();
+  const lessonsThisMonth = lessonsStartingInMonth(lessons);
+
   return (
     <div className="p-8 space-y-6 max-w-7xl mx-auto">
       {/* Welcome Header */}
@@ -17,6 +22,13 @@ export function LeadershipDashboard() {
         <h1 className="text-3xl font-semibold mb-2">Leadership Dashboard</h1>
         <p className="text-gray-600">Strategic overview and business intelligence</p>
       </div>
+
+      {lessonsError ? (
+        <p className="text-sm text-red-600" role="alert">
+          {lessonsError}
+        </p>
+      ) : null}
+      {lessonsLoading ? <p className="text-sm text-gray-500">Loading lesson visibility…</p> : null}
 
       {/* Key Business Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -52,8 +64,8 @@ export function LeadershipDashboard() {
               <span>+5%</span>
             </div>
           </div>
-          <p className="text-3xl font-bold mb-1">584</p>
-          <p className="text-sm text-gray-600">Lessons This Month</p>
+          <p className="text-3xl font-bold mb-1">{lessonsThisMonth}</p>
+          <p className="text-sm text-gray-600">Lessons this month (RLS-visible)</p>
         </div>
 
         <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">

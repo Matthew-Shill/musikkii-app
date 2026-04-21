@@ -11,16 +11,35 @@ import {
 } from 'lucide-react';
 import { LessonActions } from '../shared/lesson-actions';
 import { Link } from 'react-router';
-import { mockLessons, mockInvoices } from '../../data/mockData';
 import type { UserRole } from '../../types/domain';
+import { useDashboardLessons } from '@/app/dashboard/hooks/useDashboardLessons';
+import { useHouseholdDashboardStudents } from '@/app/dashboard/hooks/useHouseholdDashboardStudents';
+import {
+  filterUpcomingOpenLessons,
+  lessonAvatarInitialsSource,
+  lessonPrimaryLabel,
+  lessonTeacherDisplayName,
+  lessonsStartingInMonth,
+  modalityLabel,
+} from '@/app/dashboard/lessonDerived';
+import {
+  formatLessonDate,
+  formatLessonTime,
+  formatStatusLabel,
+  initialsFromDisplayName,
+  lessonStatusForUi,
+} from '@/lib/lesson-ui-helpers';
 
 interface HouseholdDashboardProps {
   role: UserRole;
 }
 
 export function HouseholdDashboard({ role }: HouseholdDashboardProps) {
-  const upcomingLessons = mockLessons.filter(l => l.status === 'scheduled' || l.status === 'confirmed');
-  const nextInvoice = mockInvoices.find(i => i.status === 'pending');
+  const { lessons, loading: lessonsLoading, error: lessonsError } = useDashboardLessons();
+  const { students, loading: studentsLoading, error: studentsError } = useHouseholdDashboardStudents();
+  const upcomingLessons = filterUpcomingOpenLessons(lessons).slice(0, 3);
+  const primaryStudent = students[0];
+  const lessonsThisMonth = lessonsStartingInMonth(lessons);
 
   return (
     <div className="p-8 space-y-6 max-w-7xl mx-auto">
@@ -31,6 +50,18 @@ export function HouseholdDashboard({ role }: HouseholdDashboardProps) {
         </h1>
         <p className="text-gray-600">Overview of your family's music education journey</p>
       </div>
+
+      {lessonsError ? (
+        <p className="text-sm text-red-600" role="alert">
+          {lessonsError}
+        </p>
+      ) : null}
+      {lessonsLoading ? <p className="text-sm text-gray-500">Loading schedule…</p> : null}
+      {studentsError ? (
+        <p className="text-sm text-red-600" role="alert">
+          {studentsError}
+        </p>
+      ) : null}
 
       {/* Action Items */}
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
@@ -65,34 +96,58 @@ export function HouseholdDashboard({ role }: HouseholdDashboardProps) {
               </Link>
             </div>
             <div className="flex items-start gap-4">
-              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white text-2xl font-semibold">
-                EC
-              </div>
-              <div className="flex-1">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 className="text-lg font-semibold">Emma Chen</h3>
-                    <p className="text-sm text-gray-600">Age 10 • Violin Student</p>
+              {studentsLoading ? (
+                <p className="text-sm text-gray-500">Loading students…</p>
+              ) : primaryStudent ? (
+                <>
+                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white text-2xl font-semibold">
+                    {initialsFromDisplayName(primaryStudent.displayName)}
                   </div>
-                  <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
-                    Active
-                  </span>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="p-3 bg-blue-50 rounded-lg">
-                    <p className="text-xs text-gray-600 mb-1">Lessons This Month</p>
-                    <p className="text-xl font-semibold" style={{ color: 'var(--musikkii-blue)' }}>8</p>
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h3 className="text-lg font-semibold">{primaryStudent.displayName}</h3>
+                        <p className="text-sm text-gray-600">Student · visible via household RLS</p>
+                        {students.length > 1 ? (
+                          <p className="text-xs text-gray-500 mt-1">
+                            Also linked:{' '}
+                            {students
+                              .slice(1)
+                              .map((s) => s.displayName)
+                              .join(', ')}
+                          </p>
+                        ) : null}
+                      </div>
+                      <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                        Active
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="p-3 bg-blue-50 rounded-lg">
+                        <p className="text-xs text-gray-600 mb-1">Lessons This Month</p>
+                        <p className="text-xl font-semibold" style={{ color: 'var(--musikkii-blue)' }}>
+                          {lessonsThisMonth}
+                        </p>
+                      </div>
+                      <div className="p-3 bg-green-50 rounded-lg">
+                        <p className="text-xs text-gray-600 mb-1">Attendance Rate</p>
+                        <p className="text-xl font-semibold text-green-600">—</p>
+                        <p className="text-[0.65rem] text-gray-500 mt-1">Not tracked yet</p>
+                      </div>
+                      <div className="p-3 bg-purple-50 rounded-lg">
+                        <p className="text-xs text-gray-600 mb-1">Practice Hours</p>
+                        <p className="text-xl font-semibold text-purple-600">—</p>
+                        <p className="text-[0.65rem] text-gray-500 mt-1">Not tracked yet</p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="p-3 bg-green-50 rounded-lg">
-                    <p className="text-xs text-gray-600 mb-1">Attendance Rate</p>
-                    <p className="text-xl font-semibold text-green-600">95%</p>
-                  </div>
-                  <div className="p-3 bg-purple-50 rounded-lg">
-                    <p className="text-xs text-gray-600 mb-1">Practice Hours</p>
-                    <p className="text-xl font-semibold text-purple-600">12.5</p>
-                  </div>
-                </div>
-              </div>
+                </>
+              ) : (
+                <p className="text-sm text-gray-600">
+                  No student profiles linked to your account yet. After seeding, ensure household membership and student
+                  rows exist for your guardian profile.
+                </p>
+              )}
             </div>
           </div>
 
@@ -100,47 +155,58 @@ export function HouseholdDashboard({ role }: HouseholdDashboardProps) {
           <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
             <h2 className="text-xl font-semibold mb-4">Upcoming Lessons</h2>
             <div className="space-y-4">
-              {upcomingLessons.slice(0, 3).map((lesson, idx) => (
-                <div key={idx} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-semibold">
-                        TR
-                      </div>
-                      <div>
-                        <h4 className="font-semibold">Violin with Ms. Rodriguez</h4>
-                        <div className="flex items-center gap-3 text-sm text-gray-600 mt-1">
-                          <div className="flex items-center gap-1">
-                            <Clock className="w-4 h-4" />
-                            <span>{new Date(lesson.date).toLocaleDateString()}</span>
+              {upcomingLessons.length === 0 && !lessonsLoading ? (
+                <p className="text-sm text-gray-500">No upcoming lessons.</p>
+              ) : (
+                upcomingLessons.map((lesson) => {
+                  const uiStatus = lessonStatusForUi(lesson.status);
+                  const title = lessonPrimaryLabel(lesson);
+                  const teacher = lessonTeacherDisplayName(lesson);
+                  return (
+                    <div key={lesson.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-semibold">
+                            {initialsFromDisplayName(lessonAvatarInitialsSource(lesson))}
                           </div>
-                          <span>•</span>
-                          <span>{lesson.modality === 'virtual' ? 'Virtual' : 'In-Person'}</span>
+                          <div>
+                            <h4 className="font-semibold">{title}</h4>
+                            <p className="text-xs text-gray-600 mt-0.5">With {teacher}</p>
+                            <div className="flex items-center gap-3 text-sm text-gray-600 mt-1">
+                              <div className="flex items-center gap-1">
+                                <Clock className="w-4 h-4" />
+                                <span>
+                                  {formatLessonDate(lesson.starts_at)} · {formatLessonTime(lesson.starts_at)}
+                                </span>
+                              </div>
+                              <span>•</span>
+                              <span>{modalityLabel(lesson.modality)}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {uiStatus === 'confirmed' ? (
+                            <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                              {formatStatusLabel(uiStatus)}
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="px-4 py-2 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors"
+                              style={{ color: 'var(--musikkii-blue)', border: '1px solid var(--musikkii-blue)' }}
+                            >
+                              Confirm
+                            </button>
+                          )}
                         </div>
                       </div>
+                      <div className="mt-3 pt-3 border-t border-gray-200">
+                        <LessonActions lessonId={lesson.id} variant="compact" />
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {lesson.status === 'confirmed' ? (
-                        <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
-                          Confirmed
-                        </span>
-                      ) : (
-                        <button className="px-4 py-2 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors"
-                                style={{ color: 'var(--musikkii-blue)', border: '1px solid var(--musikkii-blue)' }}>
-                          Confirm
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  {/* Lesson Actions */}
-                  <div className="mt-3 pt-3 border-t border-gray-200">
-                    <LessonActions
-                      lessonId={lesson.id}
-                      variant="compact"
-                    />
-                  </div>
-                </div>
-              ))}
+                  );
+                })
+              )}
             </div>
           </div>
 
@@ -248,28 +314,16 @@ export function HouseholdDashboard({ role }: HouseholdDashboardProps) {
               <h3 className="font-semibold">Billing</h3>
               <CreditCard className="w-5 h-5 text-gray-400" />
             </div>
-            {nextInvoice ? (
-              <div className="space-y-3">
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium">Next Payment</span>
-                    <span className="text-sm font-semibold text-amber-700">
-                      ${nextInvoice.amount.toFixed(2)}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-600">Due {new Date(nextInvoice.dueDate).toLocaleDateString()}</p>
-                </div>
-                <Link
-                  to="/billing"
-                  className="block w-full py-2 text-center text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
-                  style={{ color: 'var(--musikkii-blue)' }}
-                >
-                  View Billing Details
-                </Link>
-              </div>
-            ) : (
-              <p className="text-sm text-gray-600">No upcoming payments</p>
-            )}
+            <p className="text-sm text-gray-600">
+              Billing summaries are not wired to Supabase yet. Use <strong>Billing</strong> in the nav when available.
+            </p>
+            <Link
+              to="/billing"
+              className="mt-3 block w-full py-2 text-center text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+              style={{ color: 'var(--musikkii-blue)' }}
+            >
+              Go to Billing
+            </Link>
           </div>
 
           {/* Messages */}

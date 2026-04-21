@@ -7,13 +7,14 @@ import { useRole } from '../context/role-context';
  */
 export function useProfileRoleResolution() {
   const auth = useAuthSession();
-  const { role: effectiveRole, isDevRoleOverrideActive } = useRole();
+  const { role: effectiveRole } = useRole();
 
   return {
     profile: auth.profile,
     appRoleFromProfile: auth.resolvedAppRole,
     effectiveRole,
-    isDevRoleOverrideActive,
+    /** Dev session override removed; always `false` when signed in. */
+    isDevRoleOverrideActive: false,
     profileLoading: auth.profileLoading,
     profileError: auth.profileError,
     refreshProfile: auth.refreshProfile,

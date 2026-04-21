@@ -9,8 +9,25 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { Link } from 'react-router';
-import { mockLessons, mockPayouts } from '../../data/mockData';
 import type { UserRole } from '../../types/domain';
+import { useDashboardLessons } from '@/app/dashboard/hooks/useDashboardLessons';
+import { useInstructorActiveStudentCount } from '@/app/dashboard/hooks/useInstructorActiveStudentCount';
+import {
+  filterTodayLessons,
+  filterUpcomingOpenLessons,
+  isInCalendarWeek,
+  lessonDurationMinutes,
+  lessonPrimaryLabel,
+  lessonStudentDisplayLabel,
+  modalityLabel,
+} from '@/app/dashboard/lessonDerived';
+import {
+  formatLessonDate,
+  formatLessonTime,
+  formatStatusLabel,
+  initialsFromDisplayName,
+  lessonStatusForUi,
+} from '@/lib/lesson-ui-helpers';
 
 interface InstructorDashboardProps {
   role: UserRole;
@@ -18,13 +35,12 @@ interface InstructorDashboardProps {
 
 export function InstructorDashboard({ role }: InstructorDashboardProps) {
   const isManager = role === 'teacher-manager';
-  const todayLessons = mockLessons.filter(l => {
-    const today = new Date();
-    const lessonDate = new Date(l.date);
-    return lessonDate.toDateString() === today.toDateString();
-  });
-  const upcomingLessons = mockLessons.filter(l => l.status === 'scheduled' || l.status === 'confirmed').slice(0, 5);
-  const nextPayout = mockPayouts.find(p => p.status === 'pending');
+  const { lessons, loading: lessonsLoading, error: lessonsError } = useDashboardLessons();
+  const { activeStudentCount, loading: activeStudentsLoading, error: activeStudentsError } =
+    useInstructorActiveStudentCount();
+  const todayLessons = filterTodayLessons(lessons);
+  const upcomingLessons = filterUpcomingOpenLessons(lessons).slice(0, 5);
+  const weeklyLessonCount = lessons.filter((l) => isInCalendarWeek(l.starts_at)).length;
 
   return (
     <div className="p-8 space-y-6 max-w-7xl mx-auto">
@@ -35,6 +51,18 @@ export function InstructorDashboard({ role }: InstructorDashboardProps) {
         </h1>
         <p className="text-gray-600">Manage your students and lessons</p>
       </div>
+
+      {lessonsError ? (
+        <p className="text-sm text-red-600" role="alert">
+          {lessonsError}
+        </p>
+      ) : null}
+      {lessonsLoading ? <p className="text-sm text-gray-500">Loading schedule…</p> : null}
+      {activeStudentsError ? (
+        <p className="text-sm text-red-600" role="alert">
+          {activeStudentsError}
+        </p>
+      ) : null}
 
       {/* Today's Overview */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -52,8 +80,10 @@ export function InstructorDashboard({ role }: InstructorDashboardProps) {
             <Users className="w-5 h-5 text-green-500" />
             <span className="text-xs font-medium text-gray-500">ACTIVE</span>
           </div>
-          <p className="text-3xl font-bold mb-1">24</p>
-          <p className="text-sm text-gray-600">Students</p>
+          <p className="text-3xl font-bold mb-1">
+            {activeStudentsLoading ? '…' : activeStudentCount ?? '—'}
+          </p>
+          <p className="text-sm text-gray-600">Active students</p>
         </div>
 
         <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
@@ -61,8 +91,8 @@ export function InstructorDashboard({ role }: InstructorDashboardProps) {
             <TrendingUp className="w-5 h-5 text-purple-500" />
             <span className="text-xs font-medium text-gray-500">THIS WEEK</span>
           </div>
-          <p className="text-3xl font-bold mb-1">18</p>
-          <p className="text-sm text-gray-600">Lessons</p>
+          <p className="text-3xl font-bold mb-1">{lessonsLoading ? '…' : weeklyLessonCount}</p>
+          <p className="text-sm text-gray-600">Lessons this week</p>
         </div>
 
         <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
@@ -70,7 +100,7 @@ export function InstructorDashboard({ role }: InstructorDashboardProps) {
             <DollarSign className="w-5 h-5 text-orange-500" />
             <span className="text-xs font-medium text-gray-500">THIS MONTH</span>
           </div>
-          <p className="text-3xl font-bold mb-1">${nextPayout ? nextPayout.amount.toFixed(0) : '0'}</p>
+          <p className="text-3xl font-bold mb-1">—</p>
           <p className="text-sm text-gray-600">Expected Payout</p>
         </div>
       </div>
@@ -92,30 +122,47 @@ export function InstructorDashboard({ role }: InstructorDashboardProps) {
             </div>
             {todayLessons.length > 0 ? (
               <div className="space-y-3">
-                {todayLessons.map((lesson, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-semibold">
-                        EW
-                      </div>
-                      <div>
-                        <h4 className="font-semibold">Emma Wilson</h4>
-                        <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
-                          <Clock className="w-4 h-4" />
-                          <span>{new Date(lesson.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                          <span>•</span>
-                          <span>{lesson.duration} min</span>
-                          <span>•</span>
-                          <span>{lesson.modality === 'virtual' ? 'Virtual' : 'In-Person'}</span>
+                {todayLessons.map((lesson) => {
+                  const title = lessonPrimaryLabel(lesson);
+                  const students = lessonStudentDisplayLabel(lesson);
+                  const avatarSource = students ?? title;
+                  return (
+                    <div
+                      key={lesson.id}
+                      className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-semibold">
+                          {initialsFromDisplayName(avatarSource)}
+                        </div>
+                        <div>
+                          <h4 className="font-semibold">{title}</h4>
+                          {students ? <p className="text-xs text-gray-600 mt-0.5">{students}</p> : null}
+                          <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
+                            <Clock className="w-4 h-4" />
+                            <span>
+                              {new Date(lesson.starts_at).toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </span>
+                            <span>•</span>
+                            <span>{lessonDurationMinutes(lesson)} min</span>
+                            <span>•</span>
+                            <span>{modalityLabel(lesson.modality)}</span>
+                          </div>
                         </div>
                       </div>
+                      <button
+                        type="button"
+                        className="px-4 py-2 rounded-lg font-medium text-sm text-white hover:opacity-90 transition-opacity"
+                        style={{ backgroundColor: 'var(--musikkii-blue)' }}
+                      >
+                        Start Lesson
+                      </button>
                     </div>
-                    <button className="px-4 py-2 rounded-lg font-medium text-sm text-white hover:opacity-90 transition-opacity"
-                            style={{ backgroundColor: 'var(--musikkii-blue)' }}>
-                      Start Lesson
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="text-center py-8 text-gray-500">
@@ -128,28 +175,39 @@ export function InstructorDashboard({ role }: InstructorDashboardProps) {
           <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
             <h2 className="text-xl font-semibold mb-4">Upcoming Lessons</h2>
             <div className="space-y-3">
-              {upcomingLessons.map((lesson, idx) => (
-                <div key={idx} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white text-sm font-semibold">
-                      EW
+              {upcomingLessons.length === 0 && !lessonsLoading ? (
+                <p className="text-sm text-gray-500">No upcoming lessons.</p>
+              ) : (
+                upcomingLessons.map((lesson) => {
+                  const title = lessonPrimaryLabel(lesson);
+                  const students = lessonStudentDisplayLabel(lesson);
+                  const uiStatus = lessonStatusForUi(lesson.status);
+                  const avatarSource = students ?? title;
+                  return (
+                    <div key={lesson.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white text-sm font-semibold">
+                          {initialsFromDisplayName(avatarSource)}
+                        </div>
+                        <div>
+                          <p className="font-medium">{title}</p>
+                          {students ? <p className="text-xs text-gray-600">{students}</p> : null}
+                          <p className="text-sm text-gray-600">
+                            {formatLessonDate(lesson.starts_at)} at {formatLessonTime(lesson.starts_at)}
+                          </p>
+                        </div>
+                      </div>
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          uiStatus === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                        }`}
+                      >
+                        {formatStatusLabel(uiStatus)}
+                      </span>
                     </div>
-                    <div>
-                      <p className="font-medium">Emma Wilson</p>
-                      <p className="text-sm text-gray-600">
-                        {new Date(lesson.date).toLocaleDateString()} at {new Date(lesson.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    </div>
-                  </div>
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                    lesson.status === 'confirmed'
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-gray-100 text-gray-700'
-                  }`}>
-                    {lesson.status.charAt(0).toUpperCase() + lesson.status.slice(1)}
-                  </span>
-                </div>
-              ))}
+                  );
+                })
+              )}
             </div>
           </div>
 
@@ -222,29 +280,14 @@ export function InstructorDashboard({ role }: InstructorDashboardProps) {
               <h3 className="font-semibold">Payouts</h3>
               <DollarSign className="w-5 h-5 text-gray-400" />
             </div>
-            {nextPayout ? (
-              <div className="space-y-3">
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-sm font-medium mb-1">Next Payout</p>
-                  <p className="text-2xl font-bold mb-1" style={{ color: 'var(--musikkii-blue)' }}>
-                    ${nextPayout.amount.toFixed(2)}
-                  </p>
-                  <p className="text-xs text-gray-600">{nextPayout.lessonCount} lessons</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {new Date(nextPayout.periodStart).toLocaleDateString()} - {new Date(nextPayout.periodEnd).toLocaleDateString()}
-                  </p>
-                </div>
-                <Link
-                  to="/payouts"
-                  className="block w-full py-2 text-center text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
-                  style={{ color: 'var(--musikkii-blue)' }}
-                >
-                  View All Payouts
-                </Link>
-              </div>
-            ) : (
-              <p className="text-sm text-gray-600">No pending payouts</p>
-            )}
+            <p className="text-sm text-gray-600">Payout data is not wired to Supabase yet.</p>
+            <Link
+              to="/payouts"
+              className="mt-3 block w-full py-2 text-center text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+              style={{ color: 'var(--musikkii-blue)' }}
+            >
+              View Payouts
+            </Link>
           </div>
 
           {/* Tasks */}

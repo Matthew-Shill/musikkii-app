@@ -9,16 +9,20 @@ import {
   MessageSquare
 } from 'lucide-react';
 import { Link } from 'react-router';
-import { mockLessons, mockInvoices, mockPayouts } from '../../data/mockData';
+import { useDashboardLessons } from '@/app/dashboard/hooks/useDashboardLessons';
+import {
+  filterTodayLessons,
+  lessonPeopleCaption,
+  lessonPrimaryLabel,
+  lessonsStartingInMonth,
+} from '@/app/dashboard/lessonDerived';
 
 export function OperationsDashboard() {
-  const todayLessons = mockLessons.filter(l => {
-    const today = new Date();
-    const lessonDate = new Date(l.date);
-    return lessonDate.toDateString() === today.toDateString();
-  });
-  const pendingInvoices = mockInvoices.filter(i => i.status === 'pending');
-  const pendingPayouts = mockPayouts.filter(p => p.status === 'pending');
+  const { lessons, loading: lessonsLoading, error: lessonsError } = useDashboardLessons();
+  const todayLessons = filterTodayLessons(lessons);
+  const lessonsThisMonth = lessonsStartingInMonth(lessons);
+  const pendingInvoices: { id: string }[] = [];
+  const pendingPayouts: { id: string }[] = [];
 
   return (
     <div className="p-8 space-y-6 max-w-7xl mx-auto">
@@ -27,6 +31,13 @@ export function OperationsDashboard() {
         <h1 className="text-3xl font-semibold mb-2">Operations Dashboard</h1>
         <p className="text-gray-600">Platform operations and management</p>
       </div>
+
+      {lessonsError ? (
+        <p className="text-sm text-red-600" role="alert">
+          {lessonsError}
+        </p>
+      ) : null}
+      {lessonsLoading ? <p className="text-sm text-gray-500">Loading schedule…</p> : null}
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -53,8 +64,8 @@ export function OperationsDashboard() {
             <Calendar className="w-5 h-5 text-purple-500" />
             <span className="text-xs font-medium text-gray-500">THIS MONTH</span>
           </div>
-          <p className="text-3xl font-bold mb-1">584</p>
-          <p className="text-sm text-gray-600">Lessons</p>
+          <p className="text-3xl font-bold mb-1">{lessonsThisMonth}</p>
+          <p className="text-sm text-gray-600">Lessons (this month, visible)</p>
         </div>
 
         <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
@@ -121,35 +132,47 @@ export function OperationsDashboard() {
                 <p className="text-xs text-gray-600">Total Lessons</p>
               </div>
               <div className="p-3 bg-green-50 rounded-lg text-center">
-                <p className="text-2xl font-bold text-green-600">{todayLessons.filter(l => l.status === 'confirmed').length}</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {todayLessons.filter((l) => l.status === 'confirmed').length}
+                </p>
                 <p className="text-xs text-gray-600">Confirmed</p>
               </div>
               <div className="p-3 bg-amber-50 rounded-lg text-center">
-                <p className="text-2xl font-bold text-amber-600">{todayLessons.filter(l => l.status === 'scheduled').length}</p>
-                <p className="text-xs text-gray-600">Pending</p>
+                <p className="text-2xl font-bold text-amber-600">
+                  {todayLessons.filter((l) => ['scheduled', 'pending', 'draft'].includes(l.status)).length}
+                </p>
+                <p className="text-xs text-gray-600">Pending / scheduled</p>
               </div>
             </div>
             <div className="space-y-2">
-              {todayLessons.slice(0, 5).map((lesson, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Clock className="w-4 h-4 text-gray-400" />
-                    <div>
-                      <p className="text-sm font-medium">
-                        {new Date(lesson.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                      <p className="text-xs text-gray-600">{lesson.title}</p>
+              {todayLessons.length === 0 && !lessonsLoading ? (
+                <p className="text-sm text-gray-500 py-2">No lessons today.</p>
+              ) : (
+                todayLessons.slice(0, 5).map((lesson) => {
+                  const people = lessonPeopleCaption(lesson);
+                  return (
+                  <div key={lesson.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <Clock className="w-4 h-4 text-gray-400" />
+                      <div>
+                        <p className="text-sm font-medium">
+                          {new Date(lesson.starts_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        <p className="text-xs text-gray-600">{lessonPrimaryLabel(lesson)}</p>
+                        {people ? <p className="text-[0.65rem] text-gray-500 mt-0.5">{people}</p> : null}
+                      </div>
                     </div>
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        lesson.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                      }`}
+                    >
+                      {lesson.status}
+                    </span>
                   </div>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    lesson.status === 'confirmed'
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-gray-100 text-gray-700'
-                  }`}>
-                    {lesson.status}
-                  </span>
-                </div>
-              ))}
+                );
+                })
+              )}
             </div>
           </div>
 
@@ -189,6 +212,7 @@ export function OperationsDashboard() {
           {/* Financial Overview */}
           <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
             <h2 className="text-xl font-semibold mb-4">Financial Overview</h2>
+            <p className="text-xs text-gray-500 mb-3">Placeholder figures — billing / payouts tables not wired yet.</p>
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div className="p-4 bg-green-50 rounded-lg">
                 <p className="text-sm text-gray-600 mb-1">Revenue (This Month)</p>

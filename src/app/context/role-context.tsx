@@ -1,11 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { getRoleFamily, getRoleFamilyConfig, type RoleFamily } from '../config/role-config';
 import { useAuthSession } from './auth-session-context';
-import {
-  clearDevRoleOverrideStorage,
-  readDevRoleOverrideFromStorage,
-  writeDevRoleOverrideToStorage,
-} from '@/lib/dev-role-override';
+import { clearDevRoleOverrideStorage } from '@/lib/dev-role-override';
 
 export type UserRole =
   | 'adult-student'
@@ -18,16 +14,16 @@ export type UserRole =
   | 'executive';
 
 interface RoleContextType {
-  /** Effective role: DB profile when signed in (unless dev override), else preview role for anonymous/local UI */
-  role: UserRole;
   /**
-   * When signed in with Supabase: sets a **session dev override** (persisted in `sessionStorage`).
-   * When anonymous / not configured: updates **preview role** only (in-memory for UI demos).
+   * When signed in: always matches `profiles.app_role` (parsed). When signed out / Supabase off:
+   * in-memory **preview** role for UI demos only.
    */
+  role: UserRole;
+  /** Updates preview role only when **not** authenticated with Supabase; no-op when signed in. */
   setRole: (role: UserRole) => void;
-  /** Clear session dev override; effective role reverts to `resolvedAppRole` from the database */
+  /** Clears legacy `sessionStorage` dev override key if present (no-op for effective role). */
   clearDevRoleOverride: () => void;
-  /** True when signed in and a dev override is active (not the database `app_role`) */
+  /** Always false (dev UI override removed for signed-in flows). */
   isDevRoleOverrideActive: boolean;
   roleLabel: string;
   roleFamily: RoleFamily;
@@ -50,54 +46,37 @@ const roleLabels: Record<UserRole, string> = {
 export function RoleProvider({ children }: { children: ReactNode }) {
   const { isConfigured, session, resolvedAppRole } = useAuthSession();
 
-  /** Anonymous / offline UI preview role (also temporary fallback while profile loads) */
+  /** Preview role for anonymous / unconfigured app shell only. */
   const [previewRole, setPreviewRole] = useState<UserRole>('adult-student');
-  /** Mirrors sessionStorage while authenticated */
-  const [devOverride, setDevOverride] = useState<UserRole | null>(null);
 
   const signedIn = Boolean(isConfigured && session);
 
   useEffect(() => {
-    if (!signedIn) {
-      setDevOverride(null);
+    if (signedIn) {
       clearDevRoleOverrideStorage();
-      return;
     }
-    setDevOverride(readDevRoleOverrideFromStorage());
   }, [signedIn, session?.user?.id]);
 
   const setRole = useCallback(
     (next: UserRole) => {
-      if (signedIn) {
-        if (resolvedAppRole !== null && next === resolvedAppRole) {
-          clearDevRoleOverrideStorage();
-          setDevOverride(null);
-          return;
-        }
-        setDevOverride(next);
-        writeDevRoleOverrideToStorage(next);
-        return;
-      }
+      if (signedIn) return;
       setPreviewRole(next);
     },
-    [signedIn, resolvedAppRole]
+    [signedIn]
   );
 
   const clearDevRoleOverride = useCallback(() => {
     clearDevRoleOverrideStorage();
-    setDevOverride(null);
   }, []);
 
   const role = useMemo<UserRole>(() => {
     if (signedIn) {
-      if (devOverride !== null) return devOverride;
-      if (resolvedAppRole) return resolvedAppRole;
-      return previewRole;
+      return resolvedAppRole ?? 'adult-student';
     }
     return previewRole;
-  }, [signedIn, devOverride, resolvedAppRole, previewRole]);
+  }, [signedIn, resolvedAppRole, previewRole]);
 
-  const isDevRoleOverrideActive = signedIn && devOverride !== null;
+  const isDevRoleOverrideActive = false;
 
   const roleFamily = getRoleFamily(role);
   const roleFamilyConfig = getRoleFamilyConfig(role);
