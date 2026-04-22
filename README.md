@@ -10,7 +10,7 @@ Web-first Vite + React dashboard for Musikkii.
 - `npm run preview` — serve the production build locally
 - `npm run typecheck` — TypeScript (`tsc --noEmit`)
 - `npm run seed:sync-env` — write **`.env.seeding.local`** from `supabase status` (run after `supabase start`; avoids copy/paste errors)
-- `npm run seed:dev-users` — create/update **local/dev** test users (see [docs/testing/test-accounts.md](./docs/testing/test-accounts.md))
+- `npm run seed:dev-users` — create/update **local/dev** test users **and** scheduling/credits fixtures (see [docs/testing/test-accounts.md](./docs/testing/test-accounts.md))
 
 ## Environment
 

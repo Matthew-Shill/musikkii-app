@@ -7,12 +7,16 @@
  *   3. npm run seed:dev-users
  *
  * Never run against production with real user data. Password: `DEV_SEED_PASSWORD` / `VITE_DEV_SEED_PASSWORD` or default in docs/testing/test-accounts.md
+ *
+ * After users + profiles, also seeds **scheduling / credits fixtures** (household, students, teachers,
+ * lessons, availability, intents, makeup credit). See `scripts/seed-dev-scheduling-fixtures.ts`.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
+import { seedDevSchedulingFixtures } from './seed-dev-scheduling-fixtures';
 
 /** Repo root (parent of `scripts/`), not `process.cwd()` — fixes wrong cwd from some runners. */
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -256,11 +260,27 @@ async function main() {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  const profileIdByEmail: Record<string, string> = {};
   for (const acc of ACCOUNTS) {
     const userId = await ensureUser(admin, acc);
     await upsertProfile(admin, userId, acc);
+    profileIdByEmail[acc.email.toLowerCase()] = userId;
     console.log(`OK  ${acc.email} → ${acc.app_role}`);
   }
+
+  const pid = (email: string) => {
+    const id = profileIdByEmail[email.toLowerCase()];
+    if (!id) throw new Error(`Missing profile id for fixture wiring: ${email}`);
+    return id;
+  };
+
+  await seedDevSchedulingFixtures(admin, {
+    parent: pid('parent.dev@musikkii.test'),
+    childStudent: pid('child-student.dev@musikkii.test'),
+    adultStudent: pid('adult-student.dev@musikkii.test'),
+    teacher: pid('teacher.dev@musikkii.test'),
+  });
+  console.log('OK  scheduling / credits dev fixtures (see docs/testing/test-accounts.md → Test scenarios)');
 
   console.log('\nDone. See docs/testing/test-accounts.md for sign-in details.');
 }

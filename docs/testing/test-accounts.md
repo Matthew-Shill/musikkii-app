@@ -37,14 +37,34 @@ If the seed script prints `bad_jwt` or `invalid number of segments`, you likely 
 
 | Email | `profiles.app_role` | Notes |
 |-------|----------------------|--------|
-| `adult-student.dev@musikkii.test` | `adult-student` | Default learner-style |
-| `parent.dev@musikkii.test` | `parent` | Household / guardian |
-| `teacher.dev@musikkii.test` | `teacher` | Instructor |
+| `adult-student.dev@musikkii.test` | `adult-student` | Also linked as a **second student** on the dev seed household + one solo lesson |
+| `parent.dev@musikkii.test` | `parent` | Guardian on the dev seed household (see Test scenarios) |
+| `teacher.dev@musikkii.test` | `teacher` | Instructor; **`public.teachers`** row + availability from `npm run seed:dev-users` |
 | `teacher-manager.dev@musikkii.test` | `teacher-manager` | Manager scope (see migrations) |
-| `admin.dev@musikkii.test` | `admin` | Operations-style |
-| `executive.dev@musikkii.test` | `executive` | Leadership-style |
-| `child-student.dev@musikkii.test` | `child-student` | Learner (child) |
+| `admin.dev@musikkii.test` | `admin` | Operations-style; can manage any teacher’s availability exceptions (RLS) |
+| `executive.dev@musikkii.test` | `executive` | Same availability management as admin for local checks |
+| `child-student.dev@musikkii.test` | `child-student` | Primary learner on seeded household lessons |
 | `family.dev@musikkii.test` | `family` | Multi-student household |
+
+## Test scenarios (scheduling + credits seed)
+
+After **`npm run seed:dev-users`**, linked relational data is written by **`scripts/seed-dev-scheduling-fixtures.ts`** (fixed UUIDs; lesson **wall times** are derived from **seed run time** so “>24h” vs “<24h” cases stay valid). Stable identifiers for debugging are exported as **`DEV_SCHEDULE_SEED_IDS`** from that module.
+
+| Goal | Sign in as | What to open / expect |
+|------|----------------|----------------------|
+| Dashboard + calendar lists (joins to `teachers` / `profiles`) | `parent.dev@musikkii.test` or `child-student.dev@musikkii.test` | `/` and **`/calendar`** — several lessons titled **`DEV — …`** |
+| Self-reschedule candidates + commit (24h+, segments, no overlap) | `child-student.dev@musikkii.test` or `parent.dev@musikkii.test` | **`/calendar`** → lesson **`DEV — Self-reschedule eligible (>24h)`** (`lesson_id` …`000101`) |
+| Under 24h: RPCs reject; **NML** panel works | `child-student.dev@musikkii.test` | **`DEV — Under 24h (NML-only…)`** (…`000102`); a seeded **`student.nml_requested`** row is already present to exercise intent UI |
+| **Reschedule request** (teacher message thread) | `child-student.dev@musikkii.test` or `teacher.dev@musikkii.test` | **`DEV — Self-reschedule eligible`** — seeded **`student.reschedule_requested`** on that participant |
+| **Blocked time**: slots skip exception window; commit into block → `SLOT_BLOCKED_TIME_OFF` | Same as self-reschedule | **`DEV — Lesson time overlaps blocked exception`** (…`000103`); exception label **`DEV blocked window…`** |
+| Terminal **cancelled** lesson | anyone who can see the household | **`DEV — Terminal cancelled lesson`** (…`000104`) |
+| **Make-up credit** row + cancelled source lesson (post-conversion shape) | `parent.dev@musikkii.test` or `child-student.dev@musikkii.test` | **`DEV — Cancelled + makeup credit issued`** + **`makeup_credits`** row (…`000401`); **`/settings`** make-up list |
+| **Past / completed** lesson | same | **`DEV — Past completed lesson`** |
+| **Adult learner** solo lesson (`household_id` null) | `adult-student.dev@musikkii.test` | **`DEV — Adult learner solo…`** on calendar |
+| **Teacher** roster + same lessons | `teacher.dev@musikkii.test` | Dashboard + **`/calendar`**; **`/teacher-availability`** to edit segments (and own exceptions) |
+| **Admin / executive** availability overrides | `admin.dev@musikkii.test` or `executive.dev@musikkii.test` | Manage **`teacher.dev`** segments/exceptions per RLS |
+
+`family.dev` / `teacher-manager.dev` are unchanged by this fixture block (no extra rows yet); use them for role smoke tests per **`docs/testing/role-smoke-checklist.md`**.
 
 ## Recreate after `supabase db reset`
 
@@ -67,7 +87,7 @@ npm run seed:dev-users
 
 The seed script loads **`.env` first**, then **`.env.seeding.local`** (so the URL can live next to the Vite app; the service role stays separate).
 
-The script is idempotent: existing users get their `profiles.app_role` refreshed.
+The script is idempotent: existing users get their `profiles.app_role` refreshed, and scheduling fixtures are torn down and re-inserted for the wired `@musikkii.test` profiles.
 
 ## Role preview (signed-out / no Supabase only)
 

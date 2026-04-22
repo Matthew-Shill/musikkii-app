@@ -6,7 +6,7 @@ CLI-managed Supabase project files: local config, migrations, and optional seed 
 |------|---------|
 | `config.toml` | Local dev stack (ports, auth, DB major version, etc.) |
 | `migrations/` | Versioned SQL migrations (source of truth for schema) |
-| `seed.sql` | Optional data loaded after migrations on `supabase db reset` |
+| `seed.sql` | Runs after migrations on `supabase db reset` (comments only; Auth-linked fixtures come from **`npm run seed:dev-users`**) |
 
 ## Prerequisites
 
@@ -43,7 +43,7 @@ With **`supabase start`** running, from the repo root:
 
 ```bash
 npm run seed:sync-env   # writes .env.seeding.local from `supabase status` (no manual paste)
-npm run seed:dev-users  # creates test Auth users + profiles
+npm run seed:dev-users  # creates test Auth users + profiles + scheduling/credits fixtures
 ```
 
 See [`docs/testing/test-accounts.md`](../docs/testing/test-accounts.md). **Never** use the service role key in the browser or ship it to production.
