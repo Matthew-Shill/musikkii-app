@@ -6,6 +6,7 @@ import { useDashboardLessons } from '@/app/dashboard/hooks/useDashboardLessons';
 import { dashboardRowToCalendarEventDetails } from '@/app/dashboard/calendarLessonAdapters';
 import { formatLessonDate, formatLessonTime } from '@/lib/lesson-ui-helpers';
 import { formatSelfRescheduleRpcError } from '@/app/dashboard/lessonIntentSummary';
+import { learnerReschedulePrimaryButtonStyle } from '@/app/dashboard/learnerPrimaryActionStyles';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 
 type Slot = { starts_at: string; ends_at: string };
@@ -283,7 +284,8 @@ export function LessonReschedulePage() {
             type="button"
             disabled={!selectedSlot || saving}
             onClick={() => void confirmReschedule()}
-            className="px-4 py-2.5 rounded-lg text-sm font-semibold text-white bg-blue-700 hover:bg-blue-800 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="px-4 py-2.5 rounded-lg text-sm font-semibold text-white hover:brightness-105 disabled:opacity-60 disabled:cursor-not-allowed"
+            style={learnerReschedulePrimaryButtonStyle}
           >
             {saving ? 'Rescheduling…' : 'Confirm reschedule'}
           </button>

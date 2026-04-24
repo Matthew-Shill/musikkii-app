@@ -54,6 +54,14 @@ export interface LessonParticipant {
   attendanceState: AttendanceState;
 }
 
+/** Join-link timing + URL sources when built from `DashboardLessonRow` (calendar list). */
+export interface LessonCalendarJoinMeta {
+  startsAtIso: string;
+  endsAtIso: string;
+  lessonMeetingUrl: string | null;
+  teacherMeetingUrl: string | null;
+}
+
 export interface Lesson {
   id: string;
   title: string;
@@ -73,6 +81,8 @@ export interface Lesson {
   teacherDisplayName?: string;
   /** From `lesson_participants → students → profiles` when RLS allows. */
   studentDisplayName?: string;
+  /** Populated by dashboard row adapters for virtual join UI. */
+  calendarJoin?: LessonCalendarJoinMeta;
 }
 
 export interface LessonActionAvailability {

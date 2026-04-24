@@ -26,6 +26,7 @@ export function useDashboardLessons() {
     }
     setLoading(true);
     setError(null);
+    // `teachers.meeting_url` is intentionally omitted from the embed until that column exists (migration 20260423150000). Re-add it inside `teachers (...)` after applying migrations so teacher-default URLs work.
     const { data, error: qErr } = await supabase
       .from('lessons')
       .select(
@@ -39,6 +40,7 @@ export function useDashboardLessons() {
         location,
         notes,
         focus,
+        meeting_url,
         teachers (
           id,
           profile_id,
@@ -68,6 +70,9 @@ export function useDashboardLessons() {
 
     const rows = (data ?? []).map((row: Record<string, unknown>) => {
       const joins = parseDashboardLessonJoins(row);
+      const lessonMeeting = row.meeting_url;
+      const lessonMeetingNorm =
+        typeof lessonMeeting === 'string' && lessonMeeting.trim() ? lessonMeeting.trim() : null;
       return {
         id: String(row.id),
         subject: (row.subject as string | null) ?? null,
@@ -78,6 +83,8 @@ export function useDashboardLessons() {
         location: (row.location as string | null) ?? null,
         notes: (row.notes as string | null) ?? null,
         focus: (row.focus as string | null) ?? null,
+        meeting_url: lessonMeetingNorm,
+        teacher_meeting_url: joins.teacher_meeting_url,
         teacher_display_name: joins.teacher_display_name,
         student_display_name: joins.student_display_name,
         participants: joins.participants,

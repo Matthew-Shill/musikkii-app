@@ -12,14 +12,19 @@ export type LessonParticipantJoin = {
  */
 export function parseDashboardLessonJoins(row: Record<string, unknown>): {
   teacher_display_name: string | null;
+  teacher_meeting_url: string | null;
   student_display_name: string | null;
   participants: LessonParticipantJoin[];
 } {
   const teachersRaw = row.teachers;
   const teacherRow = Array.isArray(teachersRaw) ? teachersRaw[0] : teachersRaw;
   let teacher_display_name: string | null = null;
+  let teacher_meeting_url: string | null = null;
   if (teacherRow && typeof teacherRow === 'object') {
-    teacher_display_name = pickProfileNameFromEmbed((teacherRow as Record<string, unknown>).profiles);
+    const tr = teacherRow as Record<string, unknown>;
+    teacher_display_name = pickProfileNameFromEmbed(tr.profiles);
+    const rawUrl = tr.meeting_url;
+    if (typeof rawUrl === 'string' && rawUrl.trim()) teacher_meeting_url = rawUrl.trim();
   }
 
   const lpRaw = row.lesson_participants;
@@ -50,5 +55,5 @@ export function parseDashboardLessonJoins(row: Record<string, unknown>): {
   const unique = [...new Set(names)];
   const student_display_name = unique.length ? unique.join(', ') : null;
 
-  return { teacher_display_name, student_display_name, participants };
+  return { teacher_display_name, teacher_meeting_url, student_display_name, participants };
 }

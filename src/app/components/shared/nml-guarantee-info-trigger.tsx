@@ -23,6 +23,10 @@ const iconButtonClassDefault =
 const iconButtonClassInPrimary =
   "inline-flex h-full min-h-[2.25rem] w-9 shrink-0 items-center justify-center text-purple-100/90 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/45";
 
+/** Alongside outlined / secondary NML action (purple on white). */
+const iconButtonClassInSecondary =
+  "inline-flex h-full min-h-[2.25rem] w-9 shrink-0 items-center justify-center text-purple-600/90 transition-colors hover:bg-purple-50 hover:text-purple-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-purple-300/70";
+
 function usePreferPopoverForGuaranteeInfo() {
   return useSyncExternalStore(
     (cb) => {
@@ -133,22 +137,29 @@ function NmlGuaranteePopoverTrigger({ iconButtonClass }: { iconButtonClass: stri
 
 export type NmlGuaranteeInfoTriggerProps = {
   className?: string;
-  /** Placed inside the purple NML primary control (lighter icon, inset focus). */
-  variant?: "default" | "inPrimary";
+  /** `inPrimary`: solid purple NML bar · `inSecondary`: outlined / secondary NML row. */
+  variant?: "default" | "inPrimary" | "inSecondary";
 };
 
 /**
  * Subtle info control for the NML / “Never Miss A Lesson” guarantee.
  * Uses a rich tooltip on hover-capable pointers; tap opens the same copy in a popover (touch-first devices).
+ * Pair `variant` with the NML action surface (`inPrimary` vs `inSecondary`).
  */
 export function NmlGuaranteeInfoTrigger({ className, variant = "default" }: NmlGuaranteeInfoTriggerProps) {
   const preferPopover = usePreferPopoverForGuaranteeInfo();
-  const iconButtonClass = variant === "inPrimary" ? iconButtonClassInPrimary : iconButtonClassDefault;
+  const iconButtonClass =
+    variant === "inPrimary"
+      ? iconButtonClassInPrimary
+      : variant === "inSecondary"
+        ? iconButtonClassInSecondary
+        : iconButtonClassDefault;
+  const fillsControlHeight = variant === "inPrimary" || variant === "inSecondary";
   return (
     <span
       className={cn(
         "inline-flex shrink-0",
-        variant === "inPrimary" ? "h-full min-h-0" : "items-center self-center",
+        fillsControlHeight ? "h-full min-h-0" : "items-center self-center",
         className,
       )}
     >

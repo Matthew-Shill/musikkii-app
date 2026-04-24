@@ -1,10 +1,14 @@
-import { Clock, Play } from 'lucide-react';
+import { Clock, Play, Video } from 'lucide-react';
 import type { LessonStatus } from '../../../types/domain';
 import type { DashboardLessonRow } from '@/app/dashboard/lessonTypes';
 import type { CalendarEventUiStatus } from '@/app/dashboard/calendarLessonAdapters';
 import type { LessonIntentEventsConnection } from '@/app/dashboard/hooks/useLessonIntentEvents';
 import { LessonActions } from '../../shared/lesson-actions';
 import { LearnerLessonActions } from '../../pages/calendar/learner-lesson-actions';
+import { VirtualMeetingJoinLink } from '../../shared/virtual-meeting-join-link';
+import { useLessonJoinWindowLive } from '@/app/hooks/useLessonJoinWindowLive';
+import { resolveVirtualMeetingUrl } from '@/lib/lessonJoinWindow';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/app/components/ui/tooltip';
 
 interface NextLessonCardProps {
   teacherName: string;
@@ -26,6 +30,8 @@ interface NextLessonCardProps {
     onLessonDbStatusUpdated: (lessonId: string, dbStatus?: string) => void;
     onLessonsReload: () => Promise<void>;
   };
+  /** When set, virtual lessons show the timed join link (child + default layouts). */
+  virtualJoinSource?: DashboardLessonRow;
 }
 
 function statusPillFromCalendar(ui: CalendarEventUiStatus): { label: string; className: string } {
@@ -54,8 +60,21 @@ export function NextLessonCard({
   variant = 'default',
   calendarUiStatus,
   learnerActions,
+  virtualJoinSource,
 }: NextLessonCardProps) {
+  const virtualJoinRow = virtualJoinSource?.modality === 'virtual' ? virtualJoinSource : undefined;
+  const inJoinWindow = useLessonJoinWindowLive(
+    virtualJoinRow?.starts_at ?? '1970-01-01T00:00:00.000Z',
+    virtualJoinRow?.ends_at ?? '1970-01-01T00:00:01.000Z',
+    Boolean(virtualJoinRow),
+  );
+  const joinHref = virtualJoinRow
+    ? resolveVirtualMeetingUrl(virtualJoinRow.meeting_url, virtualJoinRow.teacher_meeting_url)
+    : '';
+
   if (variant === 'child') {
+    const isVirtual = Boolean(virtualJoinRow);
+
     return (
       <div className="bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl p-8 text-white shadow-lg">
         <div className="flex items-start justify-between mb-6">
@@ -68,15 +87,77 @@ export function NextLessonCard({
                 {lessonDate} at {lessonTime}
               </span>
             </div>
+            {virtualJoinRow ? (
+              <div className="mt-3 flex items-center gap-2 text-base min-w-0">
+                <Video className="w-5 h-5 flex-shrink-0 text-white/90" />
+                <VirtualMeetingJoinLink
+                  startsAtIso={virtualJoinRow.starts_at}
+                  endsAtIso={virtualJoinRow.ends_at}
+                  lessonMeetingUrl={virtualJoinRow.meeting_url}
+                  teacherMeetingUrl={virtualJoinRow.teacher_meeting_url}
+                  joinWindowOverride={inJoinWindow}
+                  metadataClassName="text-white/90"
+                />
+              </div>
+            ) : null}
           </div>
           <div className="w-20 h-20 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
             <div className="text-4xl">🎵</div>
           </div>
         </div>
-        <button className="w-full py-4 bg-white text-purple-600 rounded-xl font-semibold text-lg hover:bg-gray-100 transition-colors flex items-center justify-center gap-2">
-          <Play className="w-5 h-5" />
-          Join Lesson
-        </button>
+        {virtualJoinRow ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-disabled={!inJoinWindow}
+                tabIndex={0}
+                className={`relative w-full py-4 rounded-xl font-semibold text-lg flex items-center justify-center gap-2 overflow-hidden transition-colors ${
+                  inJoinWindow
+                    ? 'bg-white hover:bg-gray-100 cursor-pointer'
+                    : 'bg-white cursor-not-allowed'
+                }`}
+                style={{ color: '#0331bd' }}
+                onClick={() => {
+                  if (!inJoinWindow || !joinHref) return;
+                  window.open(joinHref, '_blank', 'noopener,noreferrer');
+                }}
+                onKeyDown={(e) => {
+                  if (!inJoinWindow) {
+                    if (e.key === 'Enter' || e.key === ' ') e.preventDefault();
+                    return;
+                  }
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    window.open(joinHref, '_blank', 'noopener,noreferrer');
+                  }
+                }}
+              >
+                <span
+                  className="relative z-0 inline-flex items-center gap-2"
+                  style={{ opacity: inJoinWindow ? 1 : 0.45 }}
+                >
+                  <Play className="w-5 h-5" />
+                  Join Lesson
+                </span>
+                {!inJoinWindow ? (
+                  <span
+                    className="pointer-events-none absolute inset-0 z-[1] bg-white/45 mix-blend-screen"
+                    aria-hidden
+                  />
+                ) : null}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={6}>
+              {inJoinWindow ? 'Join your lesson' : 'Available 5 minutes before lesson start'}
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <button className="w-full py-4 bg-white text-purple-600 rounded-xl font-semibold text-lg hover:bg-gray-100 transition-colors flex items-center justify-center gap-2">
+            <Play className="w-5 h-5" />
+            Join Lesson
+          </button>
+        )}
       </div>
     );
   }
@@ -100,6 +181,18 @@ export function NextLessonCard({
                   {lessonDate} at {lessonTime}
                 </span>
               </div>
+              {virtualJoinRow ? (
+                <div className="flex items-center gap-2 text-gray-600 mt-1 min-w-0">
+                  <Video className="w-4 h-4 flex-shrink-0" />
+                  <VirtualMeetingJoinLink
+                    startsAtIso={virtualJoinRow.starts_at}
+                    endsAtIso={virtualJoinRow.ends_at}
+                    lessonMeetingUrl={virtualJoinRow.meeting_url}
+                    teacherMeetingUrl={virtualJoinRow.teacher_meeting_url}
+                    joinWindowOverride={inJoinWindow}
+                  />
+                </div>
+              ) : null}
             </div>
             {pill ? (
               <span className={`px-3 py-1 rounded-full text-xs font-medium flex-shrink-0 ${pill.className}`}>{pill.label}</span>

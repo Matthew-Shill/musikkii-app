@@ -37,9 +37,16 @@ export type CalendarEventDetails = {
   dbStatus: string;
   subjectRaw: string | null;
   participants: LessonParticipantJoin[];
+  lessonMeetingUrl: string | null;
+  teacherMeetingUrl: string | null;
 };
 
 export type CalendarWeekLayoutEvent = CalendarEventDetails & { day: number; hour: number };
+
+/** Week/month/list join link — true for DB `virtual` or derived `Virtual` modality. */
+export function isVirtualCalendarEvent(event: Pick<CalendarEventDetails, 'modality' | 'dbModality'>): boolean {
+  return event.modality === 'Virtual' || event.dbModality?.toLowerCase() === 'virtual';
+}
 
 export function dbLessonStatusToDomain(status: string): Lesson['status'] {
   switch (status) {
@@ -78,6 +85,12 @@ export function dashboardRowToListLesson(row: DashboardLessonRow): Lesson {
     createdAt: new Date(row.starts_at),
     teacherDisplayName: lessonTeacherDisplayName(row),
     studentDisplayName: studentLine ?? undefined,
+    calendarJoin: {
+      startsAtIso: row.starts_at,
+      endsAtIso: row.ends_at,
+      lessonMeetingUrl: row.meeting_url,
+      teacherMeetingUrl: row.teacher_meeting_url,
+    },
   };
 }
 
@@ -118,6 +131,8 @@ export function dashboardRowToCalendarEventDetails(row: DashboardLessonRow): Cal
     dbStatus: row.status,
     subjectRaw: row.subject,
     participants: row.participants,
+    lessonMeetingUrl: row.meeting_url,
+    teacherMeetingUrl: row.teacher_meeting_url,
   };
 }
 

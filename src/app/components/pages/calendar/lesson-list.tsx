@@ -7,6 +7,7 @@ import type { CalendarEventUiStatus } from '@/app/dashboard/calendarLessonAdapte
 import type { LessonIntentEventsConnection } from '@/app/dashboard/hooks/useLessonIntentEvents';
 import { initialsFromDisplayName } from '@/lib/lesson-ui-helpers';
 import { LearnerLessonActions } from './learner-lesson-actions';
+import { VirtualMeetingJoinLink } from '../../shared/virtual-meeting-join-link';
 
 interface LessonListProps {
   lessons: Lesson[];
@@ -130,11 +131,20 @@ export function LessonList({
                         </span>
                       </div>
                       <span>•</span>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 min-w-0">
                         {lesson.modality === 'virtual' ? (
                           <>
-                            <Video className="w-4 h-4" />
-                            <span>Virtual</span>
+                            <Video className="w-4 h-4 flex-shrink-0" />
+                            {lesson.calendarJoin ? (
+                              <VirtualMeetingJoinLink
+                                startsAtIso={lesson.calendarJoin.startsAtIso}
+                                endsAtIso={lesson.calendarJoin.endsAtIso}
+                                lessonMeetingUrl={lesson.calendarJoin.lessonMeetingUrl}
+                                teacherMeetingUrl={lesson.calendarJoin.teacherMeetingUrl}
+                              />
+                            ) : (
+                              <span>Virtual</span>
+                            )}
                           </>
                         ) : (
                           <>

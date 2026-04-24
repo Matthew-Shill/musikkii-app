@@ -4,6 +4,7 @@ import { useAuthSession } from '@/app/context/auth-session-context';
 import { useRole } from '../../context/role-context';
 import { LessonList } from './calendar/lesson-list';
 import { LearnerLessonInlinePanel } from './calendar/learner-lesson-inline-panel';
+import { VirtualMeetingJoinLink } from '../shared/virtual-meeting-join-link';
 import { useCalendarLessonIntentBatch } from '@/app/dashboard/hooks/useCalendarLessonIntentBatch';
 import type { AppRoleFamily } from '../../types/domain';
 import { useDashboardLessons } from '@/app/dashboard/hooks/useDashboardLessons';
@@ -17,6 +18,7 @@ import {
   dashboardRowToCalendarEventDetails,
   dashboardRowToListLesson,
   dashboardRowsForWeekGrid,
+  isVirtualCalendarEvent,
   type CalendarEventDetails,
   type CalendarEventUiStatus,
   type CalendarWeekLayoutEvent,
@@ -512,7 +514,10 @@ function WeekView({
                           ? 'text-gray-700'
                           : 'text-yellow-800';
                 const slot = Math.max(0, Math.min(12, Math.floor(event.hour - 8)));
-                const heightPx = Math.max(28, Math.round(event.duration * 64) - 4);
+                const virtualJoin = isVirtualCalendarEvent(event);
+                const rawHeight = Math.round(event.duration * 64) - 4;
+                /** Reserve vertical space so “Virtual • Join link” is not clipped in short slots. */
+                const heightPx = Math.max(virtualJoin ? 58 : 28, rawHeight);
                 return (
                   <div
                     key={event.id}
@@ -525,7 +530,7 @@ function WeekView({
                     }}
                     role="button"
                     tabIndex={0}
-                    className={`absolute left-1 right-1 ${event.color} ${textColor} p-2 rounded text-xs font-medium shadow-sm cursor-pointer hover:shadow-md transition-all hover:scale-105 ${
+                    className={`absolute left-1 right-1 ${event.color} ${textColor} flex flex-col overflow-hidden p-2 rounded text-xs font-medium shadow-sm cursor-pointer hover:shadow-md transition-all hover:scale-105 ${
                       highlightEventId && highlightEventId === event.id ? 'ring-2 ring-blue-600 ring-offset-1 z-[1]' : ''
                     }`}
                     style={{
@@ -533,10 +538,24 @@ function WeekView({
                       height: `${heightPx}px`,
                     }}
                   >
-                    <div className="font-semibold truncate">{event.title}</div>
-                    <div className="opacity-90 mt-0.5 truncate">{event.time}</div>
-                    {event.teacher !== 'Teacher' ? (
-                      <div className="opacity-90 mt-0.5 truncate text-[0.65rem] leading-tight">{event.teacher}</div>
+                    <div className="min-h-0 min-w-0 shrink overflow-hidden">
+                      <div className="font-semibold truncate">{event.title}</div>
+                      <div className="opacity-90 mt-0.5 truncate">{event.time}</div>
+                      {event.teacher !== 'Teacher' ? (
+                        <div className="opacity-90 mt-0.5 truncate text-[0.65rem] leading-tight">{event.teacher}</div>
+                      ) : null}
+                    </div>
+                    {virtualJoin ? (
+                      <div className="mt-auto min-w-0 shrink-0 border-t border-black/10 pt-0.5 text-left font-normal">
+                        <VirtualMeetingJoinLink
+                          variant="compact"
+                          startsAtIso={event.startsAtIso}
+                          endsAtIso={event.endsAtIso}
+                          lessonMeetingUrl={event.lessonMeetingUrl}
+                          teacherMeetingUrl={event.teacherMeetingUrl}
+                          isolateFromCalendarCell
+                        />
+                      </div>
                     ) : null}
                   </div>
                 );
@@ -700,37 +719,56 @@ function MonthView({
               </div>
 
               <div className="space-y-1">
-                {dayEvents.map((event) => (
-                  <div
-                    key={event.id}
-                    onClick={() => onEventClick(event)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        onEventClick(event);
-                      }
-                    }}
-                    role="button"
-                    tabIndex={0}
-                    className={`text-xs p-1.5 rounded cursor-pointer hover:shadow-md transition-all ${
-                      event.status === 'Confirmed'
-                        ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                        : event.status === 'Cancelled'
-                          ? 'bg-red-100 text-red-800 hover:bg-red-200'
-                          : event.status === 'NML Requested'
-                            ? 'bg-purple-100 text-purple-800 hover:bg-purple-200'
-                            : event.status === 'Completed'
-                              ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                              : 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
-                    } ${highlightEventId && highlightEventId === event.id ? 'ring-2 ring-blue-600 ring-offset-1' : ''}`}
-                  >
-                    <div className="font-semibold truncate">{event.time}</div>
-                    <div className="truncate">{event.title}</div>
-                    {event.teacher !== 'Teacher' ? (
-                      <div className="truncate opacity-90 text-[0.6rem] leading-tight">{event.teacher}</div>
-                    ) : null}
-                  </div>
-                ))}
+                {dayEvents.map((event) => {
+                  const virtualJoin = isVirtualCalendarEvent(event);
+                  return (
+                    <div
+                      key={event.id}
+                      onClick={() => onEventClick(event)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          onEventClick(event);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      className={`text-xs p-1.5 rounded cursor-pointer hover:shadow-md transition-all flex flex-col overflow-hidden ${
+                        virtualJoin ? 'min-h-[4.25rem]' : ''
+                      } ${
+                        event.status === 'Confirmed'
+                          ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                          : event.status === 'Cancelled'
+                            ? 'bg-red-100 text-red-800 hover:bg-red-200'
+                            : event.status === 'NML Requested'
+                              ? 'bg-purple-100 text-purple-800 hover:bg-purple-200'
+                              : event.status === 'Completed'
+                                ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                : 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
+                      } ${highlightEventId && highlightEventId === event.id ? 'ring-2 ring-blue-600 ring-offset-1' : ''}`}
+                    >
+                      <div className="min-h-0 min-w-0 shrink overflow-hidden">
+                        <div className="font-semibold truncate">{event.time}</div>
+                        <div className="truncate">{event.title}</div>
+                        {event.teacher !== 'Teacher' ? (
+                          <div className="truncate opacity-90 text-[0.6rem] leading-tight">{event.teacher}</div>
+                        ) : null}
+                      </div>
+                      {virtualJoin ? (
+                        <div className="mt-auto min-w-0 shrink-0 border-t border-black/10 pt-0.5 text-left font-normal">
+                          <VirtualMeetingJoinLink
+                            variant="compact"
+                            startsAtIso={event.startsAtIso}
+                            endsAtIso={event.endsAtIso}
+                            lessonMeetingUrl={event.lessonMeetingUrl}
+                            teacherMeetingUrl={event.teacherMeetingUrl}
+                            isolateFromCalendarCell
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           );

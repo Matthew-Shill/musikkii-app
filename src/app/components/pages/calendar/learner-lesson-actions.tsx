@@ -9,6 +9,7 @@ import {
   formatMakeupCreditRpcError,
 } from '@/app/dashboard/lessonIntentSummary';
 import { getLearnerLessonActionPolicy, LEARNER_SLOT_POLICY_NOTE } from '@/app/dashboard/learnerLessonActionPolicy';
+import { learnerReschedulePrimaryButtonStyle } from '@/app/dashboard/learnerPrimaryActionStyles';
 import type { LessonParticipantJoin } from '@/app/dashboard/lessonJoinParsing';
 import type { CalendarEventUiStatus } from '@/app/dashboard/calendarLessonAdapters';
 import { calendarLessonDbStatusToUi } from '@/app/dashboard/calendarLessonAdapters';
@@ -256,33 +257,34 @@ export function LearnerLessonActions({
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-          <div className="flex min-w-0 overflow-hidden rounded-lg bg-purple-700 text-white shadow-sm transition-colors hover:bg-purple-800">
-            <button
-              type="button"
-              disabled={!policy.canRequestNml || nmlSaving || secondaryBusy !== null}
-              title={policy.hints.nml}
-              onClick={() => void handleNml()}
-              className="inline-flex min-w-0 flex-1 items-center justify-center gap-2 border-r border-white/20 bg-transparent px-3 py-2.5 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-55"
-            >
-              <PlayCircle className="h-4 w-4 shrink-0" aria-hidden />
-              <span className="truncate">
-                {policy.nmlRequested ? 'NML requested' : nmlSaving ? 'Saving…' : 'Request NML Video'}
-              </span>
-            </button>
-            <div className="flex shrink-0 items-stretch">
-              <NmlGuaranteeInfoTrigger variant="inPrimary" />
-            </div>
-          </div>
           <button
             type="button"
             disabled={!policy.canReschedule || secondaryBusy !== null}
             title={policy.hints.reschedule}
             onClick={handleReschedule}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold bg-white text-gray-800 border border-gray-300 hover:bg-gray-100 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white shadow-sm transition-[filter] hover:brightness-105 disabled:opacity-60 disabled:cursor-not-allowed"
+            style={learnerReschedulePrimaryButtonStyle}
           >
-            <Calendar className="w-4 h-4" />
+            <Calendar className="w-4 h-4 shrink-0" />
             Reschedule
           </button>
+          <div className="flex min-w-0 overflow-hidden rounded-lg border-2 border-purple-500/85 bg-white text-purple-900 shadow-sm">
+            <button
+              type="button"
+              disabled={!policy.canRequestNml || nmlSaving || secondaryBusy !== null}
+              title={policy.hints.nml}
+              onClick={() => void handleNml()}
+              className="inline-flex min-w-0 flex-1 items-center justify-center gap-2 border-r border-purple-200 bg-transparent px-3 py-2.5 text-sm font-medium text-purple-900 transition-colors hover:bg-purple-50/80 disabled:cursor-not-allowed disabled:opacity-55"
+            >
+              <PlayCircle className="h-4 w-4 shrink-0 text-purple-700" aria-hidden />
+              <span className="truncate">
+                {policy.nmlRequested ? 'NML requested' : nmlSaving ? 'Saving…' : 'Request NML Video'}
+              </span>
+            </button>
+            <div className="flex shrink-0 items-stretch">
+              <NmlGuaranteeInfoTrigger variant="inSecondary" />
+            </div>
+          </div>
         </div>
 
         {policy.canUndoNml ? (

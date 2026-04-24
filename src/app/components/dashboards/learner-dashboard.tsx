@@ -1,6 +1,5 @@
 import {
   Clock,
-  Video,
   CheckCircle2,
   FileText,
   TrendingUp,
@@ -31,6 +30,7 @@ import {
   lessonStatusForUi,
 } from '@/lib/lesson-ui-helpers';
 import { lessonAvatarInitialsSource, lessonPrimaryLabel, lessonTeacherDisplayName } from '@/app/dashboard/lessonDerived';
+import { JoinLessonQuickActionCard } from '../shared/join-lesson-quick-action-card';
 
 interface LearnerDashboardProps {
   role: UserRole;
@@ -78,17 +78,7 @@ export function LearnerDashboard({ role, userName }: LearnerDashboardProps) {
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
-        <button className="bg-white rounded-xl p-5 md:p-6 border border-gray-200 hover:shadow-md active:scale-98 transition-all text-left group">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform" style={{ backgroundColor: 'var(--musikkii-blue)' }}>
-              <Video className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h3 className="font-semibold">Join Lesson</h3>
-              <p className="text-sm text-gray-600">Start video call</p>
-            </div>
-          </div>
-        </button>
+        <JoinLessonQuickActionCard nextLesson={nextLessonRow} />
 
         <Link to="/practice" className="bg-white rounded-xl p-5 md:p-6 border border-gray-200 hover:shadow-md active:scale-98 transition-all text-left group block">
           <div className="flex items-center gap-3">
@@ -135,6 +125,7 @@ export function LearnerDashboard({ role, userName }: LearnerDashboardProps) {
               lessonId={nextLessonRow.id}
               variant={isChild ? 'child' : 'default'}
               calendarUiStatus={!isChild && nextCardUiStatus ? nextCardUiStatus : undefined}
+              virtualJoinSource={nextLessonRow}
               learnerActions={
                 !isChild && user?.id && nextIntentConn
                   ? {

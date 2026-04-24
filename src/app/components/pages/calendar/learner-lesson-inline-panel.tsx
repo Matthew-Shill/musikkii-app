@@ -10,6 +10,7 @@ import {
 import { formatDbLessonStatusLabel, formatLessonDate, formatLessonTime, initialsFromDisplayName } from '@/lib/lesson-ui-helpers';
 import { LearnerLessonActions } from './learner-lesson-actions';
 import type { LessonIntentEventsConnection } from '@/app/dashboard/hooks/useLessonIntentEvents';
+import { VirtualMeetingJoinLink } from '@/app/components/shared/virtual-meeting-join-link';
 
 type Props = {
   row: DashboardLessonRow;
@@ -50,6 +51,7 @@ export function LearnerLessonInlinePanel({
   const title = lessonPrimaryLabel(row);
   const teacher = lessonTeacherDisplayName(row);
   const student = lessonStudentDisplayLabel(row);
+  const isVirtual = row.modality?.toLowerCase() === 'virtual';
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
@@ -105,15 +107,25 @@ export function LearnerLessonInlinePanel({
         </div>
 
         <div className="flex items-start gap-3 text-sm text-gray-700">
-          {row.modality === 'virtual' ? (
+          {isVirtual ? (
             <Video className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
           ) : (
             <MapPin className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
           )}
-          <div>
+          <div className="min-w-0">
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Modality</p>
             <p className="font-medium text-gray-900">{modalityLabel(row.modality)}</p>
             {row.location?.trim() ? <p className="text-gray-600">{row.location}</p> : null}
+            {isVirtual ? (
+              <div className="mt-2 flex min-w-0 items-center gap-2">
+                <VirtualMeetingJoinLink
+                  startsAtIso={row.starts_at}
+                  endsAtIso={row.ends_at}
+                  lessonMeetingUrl={row.meeting_url}
+                  teacherMeetingUrl={row.teacher_meeting_url}
+                />
+              </div>
+            ) : null}
           </div>
         </div>
 

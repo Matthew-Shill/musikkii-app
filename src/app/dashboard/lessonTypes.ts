@@ -17,4 +17,7 @@ export type DashboardLessonRow = {
   student_display_name: string | null;
   /** From embedded `lesson_participants` + `students` (ids for intent inserts). */
   participants: LessonParticipantJoin[];
+  meeting_url: string | null;
+  /** From embedded `teachers` when RLS allows. */
+  teacher_meeting_url: string | null;
 };
