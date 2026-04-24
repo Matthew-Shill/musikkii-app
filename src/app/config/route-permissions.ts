@@ -109,11 +109,19 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   },
 ];
 
+/** Learner/household self-service reschedule; inherits same families as `/calendar`. */
+const CALENDAR_LESSON_RESCHEDULE_PATH = /^\/calendar\/lessons\/[^/]+\/reschedule$/;
+
 /**
  * Check if a role family has access to a specific route
  */
 export function hasRouteAccess(roleFamily: AppRoleFamily, path: string): boolean {
-  const permission = ROUTE_PERMISSIONS.find(p => p.path === path);
+  if (CALENDAR_LESSON_RESCHEDULE_PATH.test(path)) {
+    const calendar = ROUTE_PERMISSIONS.find((p) => p.path === '/calendar');
+    return Boolean(calendar && calendar.allowedFamilies.includes(roleFamily));
+  }
+
+  const permission = ROUTE_PERMISSIONS.find((p) => p.path === path);
 
   // Fail closed: if no permission defined, deny access
   if (!permission) {

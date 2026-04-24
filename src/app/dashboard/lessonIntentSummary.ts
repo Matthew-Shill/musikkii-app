@@ -14,13 +14,17 @@ function summarizeStudentTeacherPair(
   events: LessonIntentEventRow[],
   participantIds: string[],
   studentType: string,
-  teacherHandledType: string
+  teacherHandledType: string,
+  /** When set, `student.intent_cleared` rows with `payload.targetStudentEventId` close the open student intent (learner undo). */
+  studentClearType?: string
 ): { status: 'none' | 'pending' | 'addressed'; lastRequest?: LessonIntentEventRow } {
   const idSet = new Set(participantIds);
-  const relevant = events.filter(
-    (e) =>
-      idSet.has(e.lesson_participant_id) && (e.type === studentType || e.type === teacherHandledType)
-  );
+  const relevant = events.filter((e) => {
+    if (!idSet.has(e.lesson_participant_id)) return false;
+    if (e.type === studentType || e.type === teacherHandledType) return true;
+    if (studentClearType && e.type === studentClearType) return true;
+    return false;
+  });
   const asc = [...relevant].sort(
     (a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime()
   );
@@ -32,6 +36,14 @@ function summarizeStudentTeacherPair(
     }
     if (
       e.type === teacherHandledType &&
+      openStudent &&
+      String(e.payload?.targetStudentEventId) === openStudent.id
+    ) {
+      openStudent = null;
+    }
+    if (
+      studentClearType &&
+      e.type === studentClearType &&
       openStudent &&
       String(e.payload?.targetStudentEventId) === openStudent.id
     ) {
@@ -54,7 +66,13 @@ export function summarizeNmlPipeline(
   events: LessonIntentEventRow[],
   participantIds: string[]
 ): NmlPipelineSummary {
-  return summarizeStudentTeacherPair(events, participantIds, 'student.nml_requested', 'teacher.nml_handled');
+  return summarizeStudentTeacherPair(
+    events,
+    participantIds,
+    'student.nml_requested',
+    'teacher.nml_handled',
+    'student.intent_cleared'
+  );
 }
 
 /**

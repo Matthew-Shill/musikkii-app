@@ -68,7 +68,7 @@ export function useStudentsPageRoster(mode: StudentsRosterMode | null) {
     if (mode === 'household') {
       const { data, error: qErr } = await supabase
         .from('students')
-        .select('id, profile_id, profiles ( full_name )')
+        .select('id, profile_id, profiles!students_profile_id_fkey ( full_name )')
         .order('created_at', { ascending: true });
       setLoading(false);
       if (qErr) {
@@ -90,7 +90,7 @@ export function useStudentsPageRoster(mode: StudentsRosterMode | null) {
           students!inner (
             id,
             profile_id,
-            profiles ( full_name )
+            profiles!students_profile_id_fkey ( full_name )
           )
         `
         )
@@ -114,7 +114,7 @@ export function useStudentsPageRoster(mode: StudentsRosterMode | null) {
     if (mode === 'operations') {
       const { data, error: qErr } = await supabase
         .from('students')
-        .select('id, profile_id, profiles ( full_name )')
+        .select('id, profile_id, profiles!students_profile_id_fkey ( full_name )')
         .order('created_at', { ascending: true })
         .limit(200);
       setLoading(false);

@@ -13,11 +13,16 @@ import {
   Star
 } from 'lucide-react';
 import { Link } from 'react-router';
+import { useState, useMemo } from 'react';
 import { PracticeStreakWidget } from '../shared/practice-streak-widget';
 import { NextLessonCard } from './widgets/next-lesson-card';
 import type { UserRole } from '../../types/domain';
 import { mockAssignments, mockStreakState } from '../../data/mockData';
+import { useAuthSession } from '@/app/context/auth-session-context';
 import { useDashboardLessons } from '@/app/dashboard/hooks/useDashboardLessons';
+import { useCalendarLessonIntentBatch } from '@/app/dashboard/hooks/useCalendarLessonIntentBatch';
+import { calendarLessonDbStatusToUi } from '@/app/dashboard/calendarLessonAdapters';
+import type { CalendarEventUiStatus } from '@/app/dashboard/calendarLessonAdapters';
 import {
   formatLessonDate,
   formatLessonTime,
@@ -34,12 +39,27 @@ interface LearnerDashboardProps {
 
 export function LearnerDashboard({ role, userName }: LearnerDashboardProps) {
   const isChild = role === 'child-student';
-  const { lessons, loading: lessonsLoading, error: lessonsError } = useDashboardLessons();
+  const { user } = useAuthSession();
+  const { lessons, loading: lessonsLoading, error: lessonsError, reload: reloadLessons } = useDashboardLessons();
+  const [eventStatuses, setEventStatuses] = useState<Record<string, CalendarEventUiStatus>>({});
 
   const nowMs = Date.now();
   const upcomingLessonRows = lessons.filter((l) => new Date(l.ends_at).getTime() >= nowMs);
   const nextLessonRow = upcomingLessonRows[0];
   const laterLessons = upcomingLessonRows.slice(1);
+
+  const nextBatchRows = useMemo(() => (nextLessonRow ? [nextLessonRow] : []), [nextLessonRow]);
+  const intentBatch = useCalendarLessonIntentBatch(nextBatchRows, user?.id);
+
+  const nextCardUiStatus: CalendarEventUiStatus | undefined = useMemo(() => {
+    if (!nextLessonRow || !user?.id) return undefined;
+    return (
+      eventStatuses[nextLessonRow.id] ??
+      (intentBatch.nmlPendingByLessonId[nextLessonRow.id] ? 'NML Requested' : calendarLessonDbStatusToUi(nextLessonRow.status))
+    );
+  }, [nextLessonRow, user?.id, eventStatuses, intentBatch.nmlPendingByLessonId]);
+
+  const nextIntentConn = nextLessonRow && user?.id ? intentBatch.intentConnectionByLessonId[nextLessonRow.id] : undefined;
 
   // Assignments / streak / messages: still prototype data until practice tables are wired.
   const assignments = mockAssignments.slice(0, 4);
@@ -114,6 +134,27 @@ export function LearnerDashboard({ role, userName }: LearnerDashboardProps) {
               status={lessonStatusForUi(nextLessonRow.status)}
               lessonId={nextLessonRow.id}
               variant={isChild ? 'child' : 'default'}
+              calendarUiStatus={!isChild && nextCardUiStatus ? nextCardUiStatus : undefined}
+              learnerActions={
+                !isChild && user?.id && nextIntentConn
+                  ? {
+                      dashboardRow: nextLessonRow,
+                      actorProfileId: user.id,
+                      intentConnection: nextIntentConn,
+                      cardUiStatus: nextCardUiStatus ?? calendarLessonDbStatusToUi(nextLessonRow.status),
+                      onStatusChange: (lessonId, status) => setEventStatuses((prev) => ({ ...prev, [lessonId]: status })),
+                      onLessonDbStatusUpdated: (lessonId) => {
+                        setEventStatuses((prev) => {
+                          const next = { ...prev };
+                          delete next[lessonId];
+                          return next;
+                        });
+                        void reloadLessons();
+                      },
+                      onLessonsReload: reloadLessons,
+                    }
+                  : undefined
+              }
             />
           ) : null}
           {!lessonsLoading && !lessonsError && !nextLessonRow ? (

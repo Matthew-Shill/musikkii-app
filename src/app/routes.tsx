@@ -19,6 +19,7 @@ import { OperationsPage } from "./components/pages/operations-page";
 import { ReportsPage } from "./components/pages/reports-page";
 import { TeacherAvailabilityPage } from "./components/pages/teacher-availability-page";
 import { SignInPage } from "./components/pages/sign-in-page";
+import { LessonReschedulePage } from "./components/pages/lesson-reschedule-page";
 
 // Helper to wrap components with ProtectedRoute
 const withProtection = (Component: ComponentType) => {
@@ -37,6 +38,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, Component: withProtection(DashboardPage) },
       { path: "calendar", Component: withProtection(CalendarPage) },
+      { path: "calendar/lessons/:lessonId/reschedule", Component: withProtection(LessonReschedulePage) },
       { path: "practice", Component: withProtection(PracticePage) },
       { path: "practice-insights", Component: withProtection(PracticeInsightsPage) },
       { path: "progress", Component: withProtection(ProgressPage) },

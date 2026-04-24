@@ -9,10 +9,15 @@ import {
   FileText,
   Users
 } from 'lucide-react';
-import { LessonActions } from '../shared/lesson-actions';
 import { Link } from 'react-router';
+import { useState } from 'react';
 import type { UserRole } from '../../types/domain';
+import { useAuthSession } from '@/app/context/auth-session-context';
 import { useDashboardLessons } from '@/app/dashboard/hooks/useDashboardLessons';
+import { useCalendarLessonIntentBatch } from '@/app/dashboard/hooks/useCalendarLessonIntentBatch';
+import { calendarLessonDbStatusToUi } from '@/app/dashboard/calendarLessonAdapters';
+import type { CalendarEventUiStatus } from '@/app/dashboard/calendarLessonAdapters';
+import { LearnerLessonActions } from '../pages/calendar/learner-lesson-actions';
 import { useHouseholdDashboardStudents } from '@/app/dashboard/hooks/useHouseholdDashboardStudents';
 import {
   filterUpcomingOpenLessons,
@@ -35,9 +40,12 @@ interface HouseholdDashboardProps {
 }
 
 export function HouseholdDashboard({ role }: HouseholdDashboardProps) {
-  const { lessons, loading: lessonsLoading, error: lessonsError } = useDashboardLessons();
+  const { user } = useAuthSession();
+  const { lessons, loading: lessonsLoading, error: lessonsError, reload: reloadLessons } = useDashboardLessons();
   const { students, loading: studentsLoading, error: studentsError } = useHouseholdDashboardStudents();
+  const [eventStatuses, setEventStatuses] = useState<Record<string, CalendarEventUiStatus>>({});
   const upcomingLessons = filterUpcomingOpenLessons(lessons).slice(0, 3);
+  const intentBatch = useCalendarLessonIntentBatch(upcomingLessons, user?.id);
   const primaryStudent = students[0];
   const lessonsThisMonth = lessonsStartingInMonth(lessons);
 
@@ -162,14 +170,26 @@ export function HouseholdDashboard({ role }: HouseholdDashboardProps) {
                   const uiStatus = lessonStatusForUi(lesson.status);
                   const title = lessonPrimaryLabel(lesson);
                   const teacher = lessonTeacherDisplayName(lesson);
+                  const cardUi: CalendarEventUiStatus =
+                    eventStatuses[lesson.id] ??
+                    (intentBatch.nmlPendingByLessonId[lesson.id] ? 'NML Requested' : calendarLessonDbStatusToUi(lesson.status));
+                  const pill =
+                    cardUi === 'NML Requested'
+                      ? { label: 'NML Requested', className: 'bg-purple-100 text-purple-700' }
+                      : cardUi === 'Cancelled'
+                        ? { label: 'Cancelled', className: 'bg-red-100 text-red-700' }
+                        : cardUi === 'Confirmed'
+                          ? { label: formatStatusLabel(uiStatus), className: 'bg-green-100 text-green-700' }
+                          : { label: formatStatusLabel(uiStatus), className: 'bg-gray-100 text-gray-700' };
+                  const conn = user?.id ? intentBatch.intentConnectionByLessonId[lesson.id] : undefined;
                   return (
                     <div key={lesson.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-semibold">
+                      <div className="flex items-center justify-between mb-3 gap-2">
+                        <div className="flex items-center gap-4 min-w-0">
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-semibold flex-shrink-0">
                             {initialsFromDisplayName(lessonAvatarInitialsSource(lesson))}
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <h4 className="font-semibold">{title}</h4>
                             <p className="text-xs text-gray-600 mt-0.5">With {teacher}</p>
                             <div className="flex items-center gap-3 text-sm text-gray-600 mt-1">
@@ -184,25 +204,35 @@ export function HouseholdDashboard({ role }: HouseholdDashboardProps) {
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          {uiStatus === 'confirmed' ? (
-                            <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
-                              {formatStatusLabel(uiStatus)}
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              className="px-4 py-2 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors"
-                              style={{ color: 'var(--musikkii-blue)', border: '1px solid var(--musikkii-blue)' }}
-                            >
-                              Confirm
-                            </button>
-                          )}
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium flex-shrink-0 ${pill.className}`}>
+                          {pill.label}
+                        </span>
+                      </div>
+                      {user?.id && conn ? (
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <LearnerLessonActions
+                            lessonId={lesson.id}
+                            lessonDbStatus={lesson.status}
+                            startsAtIso={lesson.starts_at}
+                            endsAtIso={lesson.ends_at}
+                            participants={lesson.participants}
+                            actorProfileId={user.id}
+                            intentConnection={conn}
+                            onStatusChange={(lessonId, status) =>
+                              setEventStatuses((prev) => ({ ...prev, [lessonId]: status }))
+                            }
+                            onLessonDbStatusUpdated={(lessonId) => {
+                              setEventStatuses((prev) => {
+                                const next = { ...prev };
+                                delete next[lessonId];
+                                return next;
+                              });
+                              void reloadLessons();
+                            }}
+                            onLessonsReload={reloadLessons}
+                          />
                         </div>
-                      </div>
-                      <div className="mt-3 pt-3 border-t border-gray-200">
-                        <LessonActions lessonId={lesson.id} variant="compact" />
-                      </div>
+                      ) : null}
                     </div>
                   );
                 })

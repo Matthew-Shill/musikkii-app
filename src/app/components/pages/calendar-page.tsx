@@ -1,9 +1,10 @@
-import { Calendar as CalendarIcon, List, Grid3x3, Clock, Plus, X, Video, MapPin, CheckCircle, RefreshCw, AlertCircle, FileText, XCircle, Play } from 'lucide-react';
+import { Calendar as CalendarIcon, List, Grid3x3, Clock, Plus, X, Video, MapPin, FileText, Play } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuthSession } from '@/app/context/auth-session-context';
 import { useRole } from '../../context/role-context';
 import { LessonList } from './calendar/lesson-list';
-import { LessonStudentIntentPanels } from './calendar/lesson-student-intent-panels';
+import { LearnerLessonInlinePanel } from './calendar/learner-lesson-inline-panel';
+import { useCalendarLessonIntentBatch } from '@/app/dashboard/hooks/useCalendarLessonIntentBatch';
 import type { AppRoleFamily } from '../../types/domain';
 import { useDashboardLessons } from '@/app/dashboard/hooks/useDashboardLessons';
 import {
@@ -111,11 +112,14 @@ function listEmptyCopy(activeTab: CalendarTab, roleFamily: AppRoleFamily): { tit
 }
 
 export function CalendarPage() {
-  const { role, roleFamily } = useRole();
+  const { roleFamily } = useRole();
   const { user } = useAuthSession();
   const { lessons, loading, error, reload: reloadLessons } = useDashboardLessons();
+  const isLearnerHousehold = roleFamily === 'learner' || roleFamily === 'household';
+  const intentBatch = useCalendarLessonIntentBatch(lessons, user?.id);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedEvent, setSelectedEvent] = useState<CalendarEventDetails | null>(null);
+  const [inlineFocusLessonId, setInlineFocusLessonId] = useState<string | null>(null);
   const [eventStatuses, setEventStatuses] = useState<Record<string, CalendarEventUiStatus>>({});
   const [weekAnchor, setWeekAnchor] = useState(() => new Date());
 
@@ -127,12 +131,28 @@ export function CalendarPage() {
     setActiveTab(next[0].id);
   }, [roleFamily]);
 
+  useEffect(() => {
+    setInlineFocusLessonId(null);
+  }, [activeTab, viewMode]);
+
   const listSourceRows = useMemo(
     () => listTabSourceRows(lessons, activeTab, roleFamily),
     [lessons, activeTab, roleFamily]
   );
 
   const listLessons = useMemo(() => listSourceRows.map(dashboardRowToListLesson), [listSourceRows]);
+
+  const learnerCardUiStatusByLessonId = useMemo(() => {
+    const m: Record<string, CalendarEventUiStatus> = {};
+    if (!isLearnerHousehold) return m;
+    for (const row of listSourceRows) {
+      const id = row.id;
+      m[id] =
+        eventStatuses[id] ??
+        (intentBatch.nmlPendingByLessonId[id] ? 'NML Requested' : calendarLessonDbStatusToUi(row.status));
+    }
+    return m;
+  }, [isLearnerHousehold, listSourceRows, eventStatuses, intentBatch.nmlPendingByLessonId]);
 
   const emptyCopy = listEmptyCopy(activeTab, roleFamily);
 
@@ -143,16 +163,47 @@ export function CalendarPage() {
     [lessons, weekAnchor]
   );
 
+  const inlineFocusRow = useMemo(
+    () => (inlineFocusLessonId ? lessons.find((l) => l.id === inlineFocusLessonId) ?? null : null),
+    [lessons, inlineFocusLessonId]
+  );
+
   const renderCalendarView = () => (
     <LessonList
       lessons={listLessons}
       variant={roleFamily === 'household' ? 'compact' : 'default'}
       emptyTitle={emptyCopy.title}
       emptyDescription={emptyCopy.description}
-      onLessonClick={(lessonId) => {
-        const row = lessons.find((l) => l.id === lessonId);
-        if (row) setSelectedEvent(dashboardRowToCalendarEventDetails(row));
-      }}
+      learnerInline={
+        isLearnerHousehold && user?.id
+          ? {
+              actorProfileId: user.id,
+              sourceRows: listSourceRows,
+              intentConnectionsByLessonId: intentBatch.intentConnectionByLessonId,
+              cardUiStatusByLessonId: learnerCardUiStatusByLessonId,
+              onStatusChange: (lessonId, status) => {
+                setEventStatuses((prev) => ({ ...prev, [lessonId]: status }));
+              },
+              onLessonDbStatusUpdated: (lessonId) => {
+                setEventStatuses((prev) => {
+                  const next = { ...prev };
+                  delete next[lessonId];
+                  return next;
+                });
+                void reloadLessons();
+              },
+              onLessonsReload: reloadLessons,
+            }
+          : undefined
+      }
+      onLessonClick={
+        isLearnerHousehold
+          ? undefined
+          : (lessonId) => {
+              const row = lessons.find((l) => l.id === lessonId);
+              if (row) setSelectedEvent(dashboardRowToCalendarEventDetails(row));
+            }
+      }
     />
   );
 
@@ -266,54 +317,72 @@ export function CalendarPage() {
           }
           onThisWeek={() => setWeekAnchor(new Date())}
           events={weekGridEvents}
-          onEventClick={setSelectedEvent}
+          onEventClick={(ev) => {
+            if (isLearnerHousehold) setInlineFocusLessonId(ev.id);
+            else setSelectedEvent(ev);
+          }}
           eventStatuses={eventStatuses}
+          highlightEventId={isLearnerHousehold ? inlineFocusLessonId : null}
+          nmlPendingByLessonId={isLearnerHousehold ? intentBatch.nmlPendingByLessonId : undefined}
         />
       ) : (
-        <MonthView events={calendarEvents} onEventClick={setSelectedEvent} eventStatuses={eventStatuses} />
+        <MonthView
+          events={calendarEvents}
+          onEventClick={(ev) => {
+            if (isLearnerHousehold) setInlineFocusLessonId(ev.id);
+            else setSelectedEvent(ev);
+          }}
+          eventStatuses={eventStatuses}
+          highlightEventId={isLearnerHousehold ? inlineFocusLessonId : null}
+          nmlPendingByLessonId={isLearnerHousehold ? intentBatch.nmlPendingByLessonId : undefined}
+        />
       )}
 
-      {selectedEvent && (
+      {isLearnerHousehold && user?.id && inlineFocusLessonId ? (
+        <div className="mt-6">
+          {!inlineFocusRow ? (
+            <p className="text-sm text-gray-600">
+              This lesson is no longer visible here.{' '}
+              <button
+                type="button"
+                className="text-blue-700 font-medium underline"
+                onClick={() => setInlineFocusLessonId(null)}
+              >
+                Dismiss
+              </button>
+            </p>
+          ) : (
+            <LearnerLessonInlinePanel
+              row={inlineFocusRow}
+              actorProfileId={user.id}
+              intentConnection={intentBatch.intentConnectionByLessonId[inlineFocusRow.id]}
+              cardUiStatus={
+                eventStatuses[inlineFocusRow.id] ??
+                (intentBatch.nmlPendingByLessonId[inlineFocusRow.id]
+                  ? 'NML Requested'
+                  : calendarLessonDbStatusToUi(inlineFocusRow.status))
+              }
+              onDismiss={() => setInlineFocusLessonId(null)}
+              onStatusChange={(lessonId, status) => setEventStatuses((prev) => ({ ...prev, [lessonId]: status }))}
+              onLessonDbStatusUpdated={(lessonId) => {
+                setEventStatuses((prev) => {
+                  const next = { ...prev };
+                  delete next[lessonId];
+                  return next;
+                });
+                void reloadLessons();
+              }}
+              onLessonsReload={reloadLessons}
+            />
+          )}
+        </div>
+      ) : null}
+
+      {selectedEvent && !isLearnerHousehold && (
         <EventDetailsModal
           event={selectedEvent}
-          role={role}
-          roleFamily={roleFamily}
-          actorProfileId={user?.id}
+          uiStatus={eventStatuses[selectedEvent.id] ?? selectedEvent.status}
           onClose={() => setSelectedEvent(null)}
-          onStatusChange={(eventId, newStatus) => {
-            setEventStatuses((prev) => ({ ...prev, [eventId]: newStatus }));
-            setSelectedEvent({ ...selectedEvent, status: newStatus });
-          }}
-          currentStatus={eventStatuses[selectedEvent.id] || selectedEvent.status}
-          onLessonsReload={reloadLessons}
-          onLessonTimeUpdated={(lessonId, startsAtIso, endsAtIso) => {
-            setSelectedEvent((ev) => {
-              if (!ev || ev.id !== lessonId) return ev;
-              const t = new Date(startsAtIso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-              return {
-                ...ev,
-                startsAtIso,
-                endsAtIso,
-                date: new Date(startsAtIso),
-                time: t,
-              };
-            });
-          }}
-          onLessonDbStatusUpdated={(lessonId, dbStatus) => {
-            setEventStatuses((prev) => {
-              const next = { ...prev };
-              delete next[lessonId];
-              return next;
-            });
-            setSelectedEvent((ev) => {
-              if (!ev || ev.id !== lessonId) return ev;
-              return {
-                ...ev,
-                dbStatus,
-                status: calendarLessonDbStatusToUi(dbStatus),
-              };
-            });
-          }}
         />
       )}
     </div>
@@ -328,6 +397,8 @@ function WeekView({
   events,
   onEventClick,
   eventStatuses,
+  highlightEventId,
+  nmlPendingByLessonId,
 }: {
   weekAnchor: Date;
   onPrevWeek: () => void;
@@ -336,6 +407,8 @@ function WeekView({
   events: CalendarWeekLayoutEvent[];
   onEventClick: (event: CalendarEventDetails) => void;
   eventStatuses: Record<string, CalendarEventUiStatus>;
+  highlightEventId?: string | null;
+  nmlPendingByLessonId?: Record<string, boolean>;
 }) {
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
   const hours = Array.from({ length: 13 }, (_, i) => i + 8);
@@ -359,7 +432,9 @@ function WeekView({
   };
 
   const decorated = events.map((event) => {
-    const finalStatus = eventStatuses[event.id] ?? event.status;
+    const finalStatus =
+      eventStatuses[event.id] ??
+      (nmlPendingByLessonId?.[event.id] ? ('NML Requested' as CalendarEventUiStatus) : event.status);
     return { ...event, status: finalStatus, color: getStatusColor(finalStatus) };
   });
 
@@ -450,7 +525,9 @@ function WeekView({
                     }}
                     role="button"
                     tabIndex={0}
-                    className={`absolute left-1 right-1 ${event.color} ${textColor} p-2 rounded text-xs font-medium shadow-sm cursor-pointer hover:shadow-md transition-all hover:scale-105`}
+                    className={`absolute left-1 right-1 ${event.color} ${textColor} p-2 rounded text-xs font-medium shadow-sm cursor-pointer hover:shadow-md transition-all hover:scale-105 ${
+                      highlightEventId && highlightEventId === event.id ? 'ring-2 ring-blue-600 ring-offset-1 z-[1]' : ''
+                    }`}
                     style={{
                       top: `${slot * 64}px`,
                       height: `${heightPx}px`,
@@ -481,10 +558,14 @@ function MonthView({
   events,
   onEventClick,
   eventStatuses,
+  highlightEventId,
+  nmlPendingByLessonId,
 }: {
   events: CalendarEventDetails[];
   onEventClick: (event: CalendarEventDetails) => void;
   eventStatuses: Record<string, CalendarEventUiStatus>;
+  highlightEventId?: string | null;
+  nmlPendingByLessonId?: Record<string, boolean>;
 }) {
   const [currentDate, setCurrentDate] = useState(() => new Date());
 
@@ -537,7 +618,9 @@ function MonthView({
 
   const merged = events.map((event) => ({
     ...event,
-    status: eventStatuses[event.id] ?? event.status,
+    status:
+      eventStatuses[event.id] ??
+      (nmlPendingByLessonId?.[event.id] ? ('NML Requested' as CalendarEventUiStatus) : event.status),
   }));
 
   const getEventsForDate = (date: Date) =>
@@ -639,7 +722,7 @@ function MonthView({
                             : event.status === 'Completed'
                               ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                               : 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
-                    }`}
+                    } ${highlightEventId && highlightEventId === event.id ? 'ring-2 ring-blue-600 ring-offset-1' : ''}`}
                   >
                     <div className="font-semibold truncate">{event.time}</div>
                     <div className="truncate">{event.title}</div>
@@ -665,60 +748,18 @@ function MonthView({
 
 function EventDetailsModal({
   event,
-  role,
-  roleFamily,
-  actorProfileId,
+  uiStatus,
   onClose,
-  onStatusChange,
-  currentStatus,
-  onLessonsReload,
-  onLessonTimeUpdated,
-  onLessonDbStatusUpdated,
 }: {
   event: CalendarEventDetails;
-  role: string;
-  roleFamily: AppRoleFamily;
-  actorProfileId: string | undefined;
+  uiStatus: CalendarEventUiStatus;
   onClose: () => void;
-  onStatusChange: (eventId: string, newStatus: CalendarEventUiStatus) => void;
-  currentStatus: CalendarEventUiStatus;
-  onLessonsReload: () => Promise<void>;
-  onLessonTimeUpdated: (lessonId: string, startsAtIso: string, endsAtIso: string) => void;
-  onLessonDbStatusUpdated: (lessonId: string, dbStatus: string) => void;
 }) {
-  const [showCancelConfirmation, setShowCancelConfirmation] = useState(false);
-  const isStudent = role === 'adult-student' || role === 'child-student';
   const lessonEnd = new Date(event.endsAtIso);
   const lessonEndedByClock = lessonEnd.getTime() < Date.now();
   const dbStatusAsUi = calendarLessonDbStatusToUi(event.dbStatus);
-  const hasLocalStatusOverride = currentStatus !== dbStatusAsUi;
-  const isPast = lessonEndedByClock || currentStatus === 'Completed';
-  const isCancelled = currentStatus === 'Cancelled';
-  const showPersistedNml =
-    (roleFamily === 'learner' || roleFamily === 'household') && Boolean(actorProfileId?.trim());
-
-  const now = new Date();
-  const hoursUntilEvent = (new Date(event.startsAtIso).getTime() - now.getTime()) / (1000 * 60 * 60);
-  const canReschedule = hoursUntilEvent >= 24;
-
-  const handleConfirm = () => {
-    onStatusChange(event.id, 'Confirmed');
-    onClose();
-  };
-
-  const handleReschedule = () => {
-    onClose();
-  };
-
-  const handleCancelClick = () => {
-    setShowCancelConfirmation(true);
-  };
-
-  const handleConfirmCancel = () => {
-    onStatusChange(event.id, 'Cancelled');
-    setShowCancelConfirmation(false);
-    onClose();
-  };
+  const hasLocalStatusOverride = uiStatus !== dbStatusAsUi;
+  const isPast = lessonEndedByClock || uiStatus === 'Completed';
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -737,11 +778,6 @@ function EventDetailsModal({
               </p>
             </div>
             <p className="text-xs text-gray-400 mt-2 font-mono break-all">Lesson ID: {event.id}</p>
-            <p className="text-xs text-gray-400 mt-2">
-              Confirm and cancel in the footer are previews only (not saved). Learner/household: emerald Reschedule now
-              moves time via RPC; violet Save as make-up credit cancels the lesson and creates one credit row; sky panel
-              is teacher message intent; purple NML for under-24h / non-meeting.
-            </p>
           </div>
           <button
             type="button"
@@ -764,18 +800,18 @@ function EventDetailsModal({
                 <span className="text-xs font-medium text-amber-700 uppercase tracking-wide">Local preview</span>
                 <span
                   className={`px-3 py-1.5 rounded-full text-sm font-medium ${
-                    currentStatus === 'Confirmed'
+                    uiStatus === 'Confirmed'
                       ? 'bg-green-100 text-green-700'
-                      : currentStatus === 'Cancelled'
+                      : uiStatus === 'Cancelled'
                         ? 'bg-red-100 text-red-700'
-                        : currentStatus === 'NML Requested'
+                        : uiStatus === 'NML Requested'
                           ? 'bg-purple-100 text-purple-700'
-                          : currentStatus === 'Completed'
+                          : uiStatus === 'Completed'
                             ? 'bg-gray-100 text-gray-700'
                             : 'bg-yellow-100 text-yellow-700'
                   }`}
                 >
-                  {currentStatus}
+                  {uiStatus}
                 </span>
               </>
             ) : null}
@@ -840,21 +876,6 @@ function EventDetailsModal({
             </div>
           ) : null}
 
-          {showPersistedNml ? (
-            <LessonStudentIntentPanels
-              lessonId={event.id}
-              participants={event.participants}
-              lessonDbStatus={event.dbStatus}
-              endsAtIso={event.endsAtIso}
-              startsAtIso={event.startsAtIso}
-              onLessonTimeUpdated={(startsAtIso, endsAtIso) =>
-                onLessonTimeUpdated(event.id, startsAtIso, endsAtIso)
-              }
-              onLessonsReload={onLessonsReload}
-              onLessonDbStatusUpdated={onLessonDbStatusUpdated}
-            />
-          ) : null}
-
           {isPast ? (
             <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
               <div className="flex items-center gap-2 mb-2">
@@ -874,156 +895,15 @@ function EventDetailsModal({
           ) : null}
         </div>
 
-        {isStudent && !isPast && !isCancelled && (
-          <div className="p-6 border-t border-gray-200 bg-gray-50 space-y-3">
-            <p className="text-xs text-gray-500">
-              {showPersistedNml
-                ? 'Confirm and cancel here are not saved. Reschedule uses the sky panel above when the 24-hour rule allows.'
-                : 'These actions are not persisted yet.'}
-            </p>
-            {canReschedule ? (
-              <>
-                <div className={`grid gap-3 ${currentStatus === 'Pending' && !showPersistedNml ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                  {currentStatus === 'Pending' && (
-                    <button
-                      type="button"
-                      onClick={handleConfirm}
-                      className="flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors"
-                    >
-                      <CheckCircle className="w-5 h-5" />
-                      Confirm
-                    </button>
-                  )}
-                  {!showPersistedNml ? (
-                    <button
-                      type="button"
-                      onClick={handleReschedule}
-                      className={`flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors ${
-                        currentStatus === 'Pending' ? '' : 'col-span-2'
-                      }`}
-                    >
-                      <RefreshCw className="w-5 h-5" />
-                      Reschedule
-                    </button>
-                  ) : null}
-                </div>
-                <div className="grid grid-cols-1 gap-3">
-                  <button
-                    type="button"
-                    onClick={handleCancelClick}
-                    className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border-2 border-red-300 text-red-700 rounded-lg font-semibold hover:bg-red-50 transition-colors"
-                  >
-                    <XCircle className="w-5 h-5" />
-                    Cancel
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                {currentStatus === 'Pending' && (
-                  <button
-                    type="button"
-                    onClick={handleConfirm}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors"
-                  >
-                    <CheckCircle className="w-5 h-5" />
-                    Confirm
-                  </button>
-                )}
-                {!showPersistedNml ? (
-                  <p className="text-xs text-amber-900 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                    Reschedule preview is hidden under 24h — with Supabase sign-in, use the NML panel in this modal for a
-                    real teacher-visible request.
-                  </p>
-                ) : null}
-                <div className="grid grid-cols-1 gap-3">
-                  <button
-                    type="button"
-                    onClick={handleCancelClick}
-                    className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border-2 border-red-300 text-red-700 rounded-lg font-semibold hover:bg-red-50 transition-colors"
-                  >
-                    <XCircle className="w-5 h-5" />
-                    Cancel
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {isStudent && (isPast || isCancelled) && (
-          <div className="p-6 border-t border-gray-200">
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-full px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors"
-            >
-              Close
-            </button>
-          </div>
-        )}
-
-        {!isStudent && !isPast && (
-          <div className="p-6 border-t border-gray-200">
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-full px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors"
-            >
-              Close
-            </button>
-          </div>
-        )}
-
-        {!isStudent && isPast && (
-          <div className="p-6 border-t border-gray-200 bg-gray-50 space-y-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-full px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors"
-            >
-              Close
-            </button>
-          </div>
-        )}
-
-        {showCancelConfirmation && (
-          <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10 rounded-2xl">
-            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full m-4">
-              <div className="p-6 border-b border-gray-200">
-                <div className="flex items-center gap-3 text-red-600 mb-2">
-                  <AlertCircle className="w-6 h-6" />
-                  <h3 className="text-xl font-semibold">Cancel Lesson</h3>
-                </div>
-                <p className="text-gray-600 text-sm">This confirmation is a UI placeholder only — nothing is written to the database.</p>
-              </div>
-
-              <div className="p-6">
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                  <p className="text-sm font-semibold text-red-900 mb-1">Not a billable action yet</p>
-                  <p className="text-sm text-red-800">Cancellation APIs are not wired; this only updates local preview state.</p>
-                </div>
-
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowCancelConfirmation(false)}
-                    className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors"
-                  >
-                    Keep Lesson
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleConfirmCancel}
-                    className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors"
-                  >
-                    Cancel Lesson
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        <div className="p-6 border-t border-gray-200 bg-gray-50/70">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full px-4 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -42,7 +42,7 @@ export function useDashboardLessons() {
         teachers (
           id,
           profile_id,
-          profiles ( full_name )
+          profiles!teachers_profile_id_fkey ( full_name )
         ),
         lesson_participants (
           id,
@@ -50,7 +50,7 @@ export function useDashboardLessons() {
           students (
             id,
             profile_id,
-            profiles ( full_name )
+            profiles!students_profile_id_fkey ( full_name )
           )
         )
       `
