@@ -39,6 +39,8 @@ export type CalendarEventDetails = {
   participants: LessonParticipantJoin[];
   lessonMeetingUrl: string | null;
   teacherMeetingUrl: string | null;
+  /** Owning teacher auth profile id when embedded `teachers.profile_id` is visible. */
+  teacherProfileId: string | null;
 };
 
 export type CalendarWeekLayoutEvent = CalendarEventDetails & { day: number; hour: number };
@@ -133,6 +135,7 @@ export function dashboardRowToCalendarEventDetails(row: DashboardLessonRow): Cal
     participants: row.participants,
     lessonMeetingUrl: row.meeting_url,
     teacherMeetingUrl: row.teacher_meeting_url,
+    teacherProfileId: row.teacher_profile_id,
   };
 }
 

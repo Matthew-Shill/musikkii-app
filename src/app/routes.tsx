@@ -20,7 +20,6 @@ import { ReportsPage } from "./components/pages/reports-page";
 import { TeacherAvailabilityPage } from "./components/pages/teacher-availability-page";
 import { SignInPage } from "./components/pages/sign-in-page";
 import { LessonReschedulePage } from "./components/pages/lesson-reschedule-page";
-
 // Helper to wrap components with ProtectedRoute
 const withProtection = (Component: ComponentType) => {
   return () => (

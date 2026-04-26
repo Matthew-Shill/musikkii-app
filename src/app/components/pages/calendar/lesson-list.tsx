@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, Clock, Video, MapPin } from 'lucide-react';
 import { LessonActions } from '../../shared/lesson-actions';
 import type { Lesson } from '../../../types/domain';
@@ -8,6 +9,7 @@ import type { LessonIntentEventsConnection } from '@/app/dashboard/hooks/useLess
 import { initialsFromDisplayName } from '@/lib/lesson-ui-helpers';
 import { LearnerLessonActions } from './learner-lesson-actions';
 import { VirtualMeetingJoinLink } from '../../shared/virtual-meeting-join-link';
+import { TeacherLessonAttendanceTrigger } from './teacher-lesson-attendance-trigger';
 
 interface LessonListProps {
   lessons: Lesson[];
@@ -16,6 +18,9 @@ interface LessonListProps {
   emptyDescription?: string;
   /** Non-learner roles: opens detail modal from parent. Omitted for learner/household inline cards. */
   onLessonClick?: (lessonId: string) => void;
+  /** Rows the signed-in teacher may take attendance for (same tab as list). */
+  teacherAttendanceSourceRows?: DashboardLessonRow[];
+  onTeacherAttendanceSaved?: () => void | Promise<void>;
   /** Learner / household: actions and NML state live on the card (no modal). */
   learnerInline?: {
     actorProfileId: string;
@@ -48,6 +53,37 @@ function calendarStatusPill(status: CalendarEventUiStatus): { label: string; cla
   }
 }
 
+function sanitizeNotesHtml(html: string): string {
+  if (!html.trim()) return '';
+  if (typeof window === 'undefined') return html;
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const allowedTags = new Set(['A', 'B', 'STRONG', 'I', 'EM', 'U', 'UL', 'OL', 'LI', 'P', 'BR', 'HR', 'DIV', 'SPAN']);
+  const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove: Element[] = [];
+  while (walker.nextNode()) {
+    const el = walker.currentNode as Element;
+    if (!allowedTags.has(el.tagName)) {
+      toRemove.push(el);
+      continue;
+    }
+    for (const attr of [...el.attributes]) {
+      const n = attr.name.toLowerCase();
+      const v = attr.value.trim();
+      if (el.tagName === 'A' && (n === 'href' || n === 'target' || n === 'rel')) continue;
+      el.removeAttribute(attr.name);
+      if (n.startsWith('on')) el.removeAttribute(attr.name);
+      if (v.toLowerCase().startsWith('javascript:')) el.removeAttribute(attr.name);
+    }
+    if (el.tagName === 'A') {
+      const href = (el.getAttribute('href') || '').trim();
+      if (!href || /^javascript:/i.test(href)) el.replaceWith(doc.createTextNode(el.textContent || ''));
+    }
+  }
+  for (const el of toRemove) el.replaceWith(doc.createTextNode(el.textContent || ''));
+  return doc.body.innerHTML.trim();
+}
+
 export function LessonList({
   lessons,
   variant = 'default',
@@ -55,8 +91,15 @@ export function LessonList({
   emptyDescription,
   onLessonClick,
   learnerInline,
+  teacherAttendanceSourceRows,
+  onTeacherAttendanceSaved,
 }: LessonListProps) {
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
+  const [notesRowId, setNotesRowId] = useState<string | null>(null);
+  const notesRow = useMemo(
+    () => (notesRowId && learnerInline ? rowByLessonId(learnerInline.sourceRows, notesRowId) : null),
+    [learnerInline, notesRowId]
+  );
 
   if (lessons.length === 0) {
     return (
@@ -75,6 +118,23 @@ export function LessonList({
         const pill = cardUi ? calendarStatusPill(cardUi) : null;
         const intentConn = learnerInline && row ? learnerInline.intentConnectionsByLessonId[lesson.id] : undefined;
         const detailsOpen = expandedIds[lesson.id] ?? false;
+        const isPastLesson = row ? new Date(row.ends_at).getTime() < Date.now() : false;
+        const isClosedByStatus = ['completed', 'no_show', 'cancelled'].includes(lesson.status);
+        const canViewPostLesson = Boolean(learnerInline && row && (isPastLesson || isClosedByStatus));
+        const rowAny = row as
+          | (DashboardLessonRow & {
+              recording_url?: string | null;
+              nml_video_url?: string | null;
+              zoom_recording_url?: string | null;
+            })
+          | undefined;
+        const recordingUrl =
+          rowAny?.recording_url ||
+          rowAny?.nml_video_url ||
+          rowAny?.zoom_recording_url ||
+          row?.meeting_url ||
+          row?.teacher_meeting_url;
+        const hasRecording = Boolean(recordingUrl);
 
         return (
           <div
@@ -252,12 +312,53 @@ export function LessonList({
                     onLessonsReload={learnerInline.onLessonsReload}
                   />
                 ) : null}
+                {canViewPostLesson ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (row?.id) setNotesRowId(row.id);
+                      }}
+                      className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      Lesson Notes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (recordingUrl) window.open(recordingUrl, '_blank', 'noopener,noreferrer');
+                      }}
+                      disabled={!hasRecording}
+                      title={hasRecording ? 'Open lesson recording' : 'Recording not available yet'}
+                      className={`inline-flex items-center justify-center rounded-lg border px-3 py-1.5 text-xs font-medium ${
+                        hasRecording
+                          ? 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                          : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
+                      }`}
+                    >
+                      View Recording
+                    </button>
+                  </div>
+                ) : null}
 
                 {!learnerInline ? (
                   <>
-                    <LessonActions lessonId={lesson.id} lessonDate={lesson.date} variant={variant === 'compact' ? 'compact' : 'default'} />
+                    {(() => {
+                      const attRow = teacherAttendanceSourceRows?.find((r) => r.id === lesson.id);
+                      return attRow ? (
+                        <TeacherLessonAttendanceTrigger
+                          row={attRow}
+                          variant={variant === 'compact' ? 'compact' : 'default'}
+                          onSaved={onTeacherAttendanceSaved}
+                        />
+                      ) : (
+                        <LessonActions lessonId={lesson.id} lessonDate={lesson.date} variant={variant === 'compact' ? 'compact' : 'default'} />
+                      );
+                    })()}
                     <p className="text-xs text-gray-400 mt-3">
-                      These row buttons are not saved. Open the lesson block above for full details.
+                      {teacherAttendanceSourceRows?.some((r) => r.id === lesson.id)
+                        ? 'Take attendance to record how the lesson went and save notes.'
+                        : 'These row buttons are not saved. Open the lesson block above for full details.'}
                     </p>
                   </>
                 ) : null}
@@ -266,6 +367,68 @@ export function LessonList({
           </div>
         );
       })}
+      {notesRow
+        ? createPortal(
+            <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-[2px]">
+              <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200/80 bg-white shadow-2xl">
+                <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-100 bg-white px-5 py-4">
+                  <div>
+                    <h2 className="text-lg font-semibold text-slate-900">Lesson notes</h2>
+                    <p className="mt-1 text-sm text-slate-600">{new Date(notesRow.starts_at).toLocaleString()}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setNotesRowId(null)}
+                    className="rounded-full p-2 text-slate-500 hover:bg-slate-100"
+                    aria-label="Close notes"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="space-y-4 p-5">
+                  {notesRow.lesson_notes?.notes ? (
+                    <section className="rounded-xl border border-sky-100/80 bg-white p-4">
+                      <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-sky-900/90">Lesson Notes</h3>
+                      <div
+                        className="text-sm text-slate-800 [&_a]:cursor-pointer [&_a]:font-medium [&_a]:text-sky-700 [&_a]:underline [&_a]:underline-offset-2"
+                        dangerouslySetInnerHTML={{ __html: sanitizeNotesHtml(notesRow.lesson_notes.notes) }}
+                      />
+                    </section>
+                  ) : null}
+                  {notesRow.lesson_notes?.assignments?.length ? (
+                    <section className="rounded-xl border border-violet-100/80 bg-white p-4">
+                      <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-violet-900/90">Assignments</h3>
+                      <ul className="space-y-2">
+                        {notesRow.lesson_notes.assignments.map((a) => (
+                          <li key={a.id} className="rounded-lg border border-violet-100 bg-violet-50/40 p-3 text-sm text-slate-800">
+                            <p className="font-medium">{a.title || 'Untitled assignment'}</p>
+                            {a.description ? <p className="mt-1 text-slate-600">{a.description}</p> : null}
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  ) : null}
+                  {notesRow.lesson_notes?.reference_resources?.length ? (
+                    <section className="rounded-xl border border-amber-100/80 bg-white p-4">
+                      <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-amber-900/90">Reference Materials</h3>
+                      <ul className="space-y-1.5 text-sm text-slate-700">
+                        {notesRow.lesson_notes.reference_resources.map((resource) => (
+                          <li key={resource.id}>{resource.title}</li>
+                        ))}
+                      </ul>
+                    </section>
+                  ) : null}
+                  {!notesRow.lesson_notes?.notes &&
+                  !notesRow.lesson_notes?.assignments?.length &&
+                  !notesRow.lesson_notes?.reference_resources?.length ? (
+                    <p className="text-sm text-slate-500">No lesson notes were uploaded for this lesson yet.</p>
+                  ) : null}
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }

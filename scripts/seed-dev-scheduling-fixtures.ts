@@ -22,6 +22,9 @@ export const DEV_SCHEDULE_SEED_IDS = {
   lessonMakeupSource: 'cafe1000-0000-4000-8000-000000000105',
   lessonPastCompleted: 'cafe1000-0000-4000-8000-000000000106',
   lessonAdultSolo: 'cafe1000-0000-4000-8000-000000000107',
+  lessonTodayUpcoming: 'cafe1000-0000-4000-8000-000000000108',
+  lessonTodayCompletedA: 'cafe1000-0000-4000-8000-000000000109',
+  lessonTodayCompletedB: 'cafe1000-0000-4000-8000-000000000110',
   lpSelfRescheduleOk: 'cafe1000-0000-4000-8000-000000000201',
   lpUnder24hNml: 'cafe1000-0000-4000-8000-000000000202',
   lpBlockedOverlap: 'cafe1000-0000-4000-8000-000000000203',
@@ -29,6 +32,9 @@ export const DEV_SCHEDULE_SEED_IDS = {
   lpMakeup: 'cafe1000-0000-4000-8000-000000000205',
   lpPast: 'cafe1000-0000-4000-8000-000000000206',
   lpAdultSolo: 'cafe1000-0000-4000-8000-000000000207',
+  lpTodayUpcoming: 'cafe1000-0000-4000-8000-000000000208',
+  lpTodayCompletedA: 'cafe1000-0000-4000-8000-000000000209',
+  lpTodayCompletedB: 'cafe1000-0000-4000-8000-000000000210',
   intentNmlOpen: 'cafe1000-0000-4000-8000-000000000301',
   intentRescheduleOpen: 'cafe1000-0000-4000-8000-000000000302',
   makeupCreditFrom105: 'cafe1000-0000-4000-8000-000000000401',
@@ -42,6 +48,9 @@ const LESSON_IDS: readonly string[] = [
   DEV_SCHEDULE_SEED_IDS.lessonMakeupSource,
   DEV_SCHEDULE_SEED_IDS.lessonPastCompleted,
   DEV_SCHEDULE_SEED_IDS.lessonAdultSolo,
+  DEV_SCHEDULE_SEED_IDS.lessonTodayUpcoming,
+  DEV_SCHEDULE_SEED_IDS.lessonTodayCompletedA,
+  DEV_SCHEDULE_SEED_IDS.lessonTodayCompletedB,
 ];
 
 function floorToUtcQuarterHour(d: Date): Date {
@@ -164,6 +173,13 @@ export async function seedDevSchedulingFixtures(
   // Extra: adult learner solo row (household_id null) for adult-student.dev calendar visibility.
   const tAdultSoloStart = floorToUtcQuarterHour(addHours(now, 96));
   const tAdultSoloEnd = addHours(tAdultSoloStart, 1);
+  // Extra: "today" coverage for dashboard testing (upcoming + completed tab rows).
+  const tTodayUpcomingStart = floorToUtcQuarterHour(addHours(now, 1));
+  const tTodayUpcomingEnd = addHours(tTodayUpcomingStart, 1);
+  const tTodayCompletedAStart = floorToUtcQuarterHour(addHours(now, -5));
+  const tTodayCompletedAEnd = addHours(tTodayCompletedAStart, 1);
+  const tTodayCompletedBStart = floorToUtcQuarterHour(addHours(now, -2));
+  const tTodayCompletedBEnd = addHours(tTodayCompletedBStart, 1);
 
   const teacherId = DEV_SCHEDULE_SEED_IDS.teacher;
   const householdId = DEV_SCHEDULE_SEED_IDS.household;
@@ -305,6 +321,39 @@ export async function seedDevSchedulingFixtures(
       modality: 'virtual',
       notes: 'Scenario: sign in as adult-student.dev; roster is not household-linked but this lesson should appear.',
     },
+    {
+      id: DEV_SCHEDULE_SEED_IDS.lessonTodayUpcoming,
+      teacher_id: teacherId,
+      household_id: householdId,
+      subject: 'DEV — Today upcoming lesson',
+      status: 'scheduled',
+      starts_at: tTodayUpcomingStart.toISOString(),
+      ends_at: tTodayUpcomingEnd.toISOString(),
+      modality: 'virtual',
+      notes: 'Scenario: Today tab Upcoming should include this lesson.',
+    },
+    {
+      id: DEV_SCHEDULE_SEED_IDS.lessonTodayCompletedA,
+      teacher_id: teacherId,
+      household_id: householdId,
+      subject: 'DEV — Today completed lesson A',
+      status: 'completed',
+      starts_at: tTodayCompletedAStart.toISOString(),
+      ends_at: tTodayCompletedAEnd.toISOString(),
+      modality: 'virtual',
+      notes: 'Scenario: Today tab Completed should include this lesson.',
+    },
+    {
+      id: DEV_SCHEDULE_SEED_IDS.lessonTodayCompletedB,
+      teacher_id: teacherId,
+      household_id: householdId,
+      subject: 'DEV — Today completed lesson B',
+      status: 'completed',
+      starts_at: tTodayCompletedBStart.toISOString(),
+      ends_at: tTodayCompletedBEnd.toISOString(),
+      modality: 'virtual',
+      notes: 'Scenario: Another completed row for today tab testing.',
+    },
   ];
 
   const { error: lIns } = await admin.from('lessons').insert(lessonsInsert);
@@ -345,6 +394,21 @@ export async function seedDevSchedulingFixtures(
       id: DEV_SCHEDULE_SEED_IDS.lpAdultSolo,
       lesson_id: DEV_SCHEDULE_SEED_IDS.lessonAdultSolo,
       student_id: studentAdultHh,
+    },
+    {
+      id: DEV_SCHEDULE_SEED_IDS.lpTodayUpcoming,
+      lesson_id: DEV_SCHEDULE_SEED_IDS.lessonTodayUpcoming,
+      student_id: studentChild,
+    },
+    {
+      id: DEV_SCHEDULE_SEED_IDS.lpTodayCompletedA,
+      lesson_id: DEV_SCHEDULE_SEED_IDS.lessonTodayCompletedA,
+      student_id: studentChild,
+    },
+    {
+      id: DEV_SCHEDULE_SEED_IDS.lpTodayCompletedB,
+      lesson_id: DEV_SCHEDULE_SEED_IDS.lessonTodayCompletedB,
+      student_id: studentChild,
     },
   ]);
   if (lpIns) throw lpIns;

@@ -1,6 +1,5 @@
 import {
   Calendar,
-  Clock,
   Users,
   TrendingUp,
   DollarSign,
@@ -9,24 +8,24 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { Link } from 'react-router';
+import { useMemo, useState } from 'react';
 import type { UserRole } from '../../types/domain';
+import { useAuthSession } from '@/app/context/auth-session-context';
 import { useDashboardLessons } from '@/app/dashboard/hooks/useDashboardLessons';
+import { TeacherLessonAttendanceTrigger } from '../pages/calendar/teacher-lesson-attendance-trigger';
 import { useInstructorActiveStudentCount } from '@/app/dashboard/hooks/useInstructorActiveStudentCount';
 import {
   filterTodayLessons,
+  filterHistoryLessons,
   filterUpcomingOpenLessons,
   isInCalendarWeek,
-  lessonDurationMinutes,
   lessonPrimaryLabel,
   lessonStudentDisplayLabel,
-  modalityLabel,
 } from '@/app/dashboard/lessonDerived';
 import {
   formatLessonDate,
   formatLessonTime,
-  formatStatusLabel,
   initialsFromDisplayName,
-  lessonStatusForUi,
 } from '@/lib/lesson-ui-helpers';
 
 interface InstructorDashboardProps {
@@ -35,11 +34,27 @@ interface InstructorDashboardProps {
 
 export function InstructorDashboard({ role }: InstructorDashboardProps) {
   const isManager = role === 'teacher-manager';
-  const { lessons, loading: lessonsLoading, error: lessonsError } = useDashboardLessons();
+  const { user } = useAuthSession();
+  const { lessons, loading: lessonsLoading, error: lessonsError, reload: reloadLessons } = useDashboardLessons();
   const { activeStudentCount, loading: activeStudentsLoading, error: activeStudentsError } =
     useInstructorActiveStudentCount();
   const todayLessons = filterTodayLessons(lessons);
-  const upcomingLessons = filterUpcomingOpenLessons(lessons).slice(0, 5);
+  const [scheduleTab, setScheduleTab] = useState<'upcoming' | 'completed'>('upcoming');
+  const upcomingLessons = useMemo(
+    () =>
+      filterUpcomingOpenLessons(todayLessons)
+        .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())
+        .slice(0, 8),
+    [todayLessons]
+  );
+  const completedLessons = useMemo(
+    () =>
+      filterHistoryLessons(todayLessons)
+        .sort((a, b) => new Date(b.starts_at).getTime() - new Date(a.starts_at).getTime())
+        .slice(0, 8),
+    [todayLessons]
+  );
+  const scheduleRows = scheduleTab === 'upcoming' ? upcomingLessons : completedLessons;
   const weeklyLessonCount = lessons.filter((l) => isInCalendarWeek(l.starts_at)).length;
 
   return (
@@ -105,114 +120,79 @@ export function InstructorDashboard({ role }: InstructorDashboardProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Column */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Today's Schedule */}
-          <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
+      <div className="space-y-6">
+        {/* Today's Schedule */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
               <h2 className="text-xl font-semibold">Today's Schedule</h2>
-              <Link
-                to="/calendar"
-                className="text-sm font-medium hover:underline"
-                style={{ color: 'var(--musikkii-blue)' }}
-              >
-                View Full Calendar
-              </Link>
+              <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+                <button
+                  type="button"
+                  onClick={() => setScheduleTab('upcoming')}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium ${
+                    scheduleTab === 'upcoming' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Upcoming
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScheduleTab('completed')}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium ${
+                    scheduleTab === 'completed' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Completed
+                </button>
+              </div>
             </div>
-            {todayLessons.length > 0 ? (
-              <div className="space-y-3">
-                {todayLessons.map((lesson) => {
-                  const title = lessonPrimaryLabel(lesson);
-                  const students = lessonStudentDisplayLabel(lesson);
-                  const avatarSource = students ?? title;
-                  return (
-                    <div
-                      key={lesson.id}
-                      className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-semibold">
-                          {initialsFromDisplayName(avatarSource)}
-                        </div>
-                        <div>
-                          <h4 className="font-semibold">{title}</h4>
-                          {students ? <p className="text-xs text-gray-600 mt-0.5">{students}</p> : null}
-                          <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
-                            <Clock className="w-4 h-4" />
-                            <span>
-                              {new Date(lesson.starts_at).toLocaleTimeString([], {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
-                            </span>
-                            <span>•</span>
-                            <span>{lessonDurationMinutes(lesson)} min</span>
-                            <span>•</span>
-                            <span>{modalityLabel(lesson.modality)}</span>
-                          </div>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        className="px-4 py-2 rounded-lg font-medium text-sm text-white hover:opacity-90 transition-opacity"
-                        style={{ backgroundColor: 'var(--musikkii-blue)' }}
-                      >
-                        Start Lesson
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
+            <Link
+              to="/calendar"
+              className="text-sm font-medium hover:underline"
+              style={{ color: 'var(--musikkii-blue)' }}
+            >
+              View Full Calendar
+            </Link>
+          </div>
+          <div className="space-y-3">
+            {scheduleRows.length === 0 && !lessonsLoading ? (
+              <p className="text-sm text-gray-500">
+                {scheduleTab === 'upcoming' ? 'No upcoming lessons.' : 'No completed lessons yet.'}
+              </p>
             ) : (
-              <div className="text-center py-8 text-gray-500">
-                No lessons scheduled for today
-              </div>
+              scheduleRows.map((lesson) => {
+                const title = lessonPrimaryLabel(lesson);
+                const students = lessonStudentDisplayLabel(lesson);
+                const avatarSource = students ?? title;
+                return (
+                  <div key={lesson.id} className="flex items-center justify-between gap-3 p-4 border border-gray-200 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white text-sm font-semibold">
+                        {initialsFromDisplayName(avatarSource)}
+                      </div>
+                      <div>
+                        <p className="font-medium">{title}</p>
+                        {students ? <p className="text-xs text-gray-600">{students}</p> : null}
+                        <p className="text-sm text-gray-600">
+                          {formatLessonDate(lesson.starts_at)} at {formatLessonTime(lesson.starts_at)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {user?.id && lesson.teacher_profile_id === user.id ? (
+                        <TeacherLessonAttendanceTrigger row={lesson} variant="compact" onSaved={reloadLessons} />
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
+        </div>
 
-          {/* Upcoming Lessons */}
-          <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-            <h2 className="text-xl font-semibold mb-4">Upcoming Lessons</h2>
-            <div className="space-y-3">
-              {upcomingLessons.length === 0 && !lessonsLoading ? (
-                <p className="text-sm text-gray-500">No upcoming lessons.</p>
-              ) : (
-                upcomingLessons.map((lesson) => {
-                  const title = lessonPrimaryLabel(lesson);
-                  const students = lessonStudentDisplayLabel(lesson);
-                  const uiStatus = lessonStatusForUi(lesson.status);
-                  const avatarSource = students ?? title;
-                  return (
-                    <div key={lesson.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white text-sm font-semibold">
-                          {initialsFromDisplayName(avatarSource)}
-                        </div>
-                        <div>
-                          <p className="font-medium">{title}</p>
-                          {students ? <p className="text-xs text-gray-600">{students}</p> : null}
-                          <p className="text-sm text-gray-600">
-                            {formatLessonDate(lesson.starts_at)} at {formatLessonTime(lesson.starts_at)}
-                          </p>
-                        </div>
-                      </div>
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          uiStatus === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-                        }`}
-                      >
-                        {formatStatusLabel(uiStatus)}
-                      </span>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          {/* Student Insights */}
-          <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+        {/* Student Insights */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold">Student Activity</h2>
               <Link
@@ -246,36 +226,9 @@ export function InstructorDashboard({ role }: InstructorDashboardProps) {
               ))}
             </div>
           </div>
-        </div>
 
-        {/* Sidebar */}
-        <div className="space-y-6">
-          {/* Quick Actions */}
-          <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-            <h3 className="font-semibold mb-4">Quick Actions</h3>
-            <div className="space-y-2">
-              <button className="w-full px-4 py-3 rounded-lg font-medium text-sm text-white hover:opacity-90 transition-opacity"
-                      style={{ backgroundColor: 'var(--musikkii-blue)' }}>
-                Create Assignment
-              </button>
-              <Link
-                to="/calendar"
-                className="block w-full px-4 py-3 text-center rounded-lg font-medium text-sm border hover:bg-gray-50 transition-colors"
-                style={{ borderColor: 'var(--musikkii-blue)', color: 'var(--musikkii-blue)' }}
-              >
-                Schedule Lesson
-              </Link>
-              <Link
-                to="/students"
-                className="block w-full px-4 py-3 text-center rounded-lg font-medium text-sm border border-gray-200 hover:bg-gray-50 transition-colors"
-              >
-                View Students
-              </Link>
-            </div>
-          </div>
-
-          {/* Payout Summary */}
-          <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+        {/* Payout Summary */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold">Payouts</h3>
               <DollarSign className="w-5 h-5 text-gray-400" />
@@ -290,8 +243,8 @@ export function InstructorDashboard({ role }: InstructorDashboardProps) {
             </Link>
           </div>
 
-          {/* Tasks */}
-          <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+        {/* Tasks */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
             <h3 className="font-semibold mb-4">Tasks</h3>
             <div className="space-y-3">
               {[
@@ -311,8 +264,8 @@ export function InstructorDashboard({ role }: InstructorDashboardProps) {
             </div>
           </div>
 
-          {/* Messages */}
-          <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+        {/* Messages */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold">Messages</h3>
               <MessageSquare className="w-5 h-5 text-gray-400" />
@@ -331,27 +284,26 @@ export function InstructorDashboard({ role }: InstructorDashboardProps) {
             </div>
           </div>
 
-          {/* Performance Stats */}
-          {isManager && (
-            <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-              <h3 className="font-semibold mb-4">Team Performance</h3>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Total Lessons</span>
-                  <span className="text-lg font-semibold">142</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Completion Rate</span>
-                  <span className="text-lg font-semibold text-green-600">96%</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Avg Rating</span>
-                  <span className="text-lg font-semibold">4.8 ⭐</span>
-                </div>
+        {/* Performance Stats */}
+        {isManager && (
+          <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+            <h3 className="font-semibold mb-4">Team Performance</h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Total Lessons</span>
+                <span className="text-lg font-semibold">142</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Completion Rate</span>
+                <span className="text-lg font-semibold text-green-600">96%</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Avg Rating</span>
+                <span className="text-lg font-semibold">4.8 ⭐</span>
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

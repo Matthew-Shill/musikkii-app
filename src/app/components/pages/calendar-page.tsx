@@ -26,6 +26,7 @@ import {
 import { modalityLabel } from '@/app/dashboard/lessonDerived';
 import { formatDbLessonStatusLabel, formatLessonDate, formatLessonTime } from '@/lib/lesson-ui-helpers';
 import type { DashboardLessonRow } from '@/app/dashboard/lessonTypes';
+import { TeacherLessonAttendanceTrigger } from './calendar/teacher-lesson-attendance-trigger';
 
 type ViewMode = 'list' | 'week' | 'month';
 type CalendarTab = 'upcoming' | 'completed' | 'requests' | 'schedule' | 'team' | 'operations' | 'overview';
@@ -34,7 +35,8 @@ function getTabsForRoleFamily(family: AppRoleFamily): { id: CalendarTab; label: 
   switch (family) {
     case 'instructor':
       return [
-        { id: 'schedule', label: 'My Schedule' },
+        { id: 'upcoming', label: 'Upcoming' },
+        { id: 'completed', label: 'Completed' },
         { id: 'requests', label: 'Requests' },
       ];
     case 'operations':
@@ -170,6 +172,16 @@ export function CalendarPage() {
     [lessons, inlineFocusLessonId]
   );
 
+  const teacherAttendanceSourceRows = useMemo(() => {
+    if (roleFamily !== 'instructor' || !user?.id) return undefined;
+    return listSourceRows.filter((l) => l.teacher_profile_id === user.id);
+  }, [roleFamily, user?.id, listSourceRows]);
+
+  const selectedLessonAttendanceRow = useMemo(() => {
+    if (!selectedEvent || roleFamily !== 'instructor' || !user?.id) return null;
+    return lessons.find((l) => l.id === selectedEvent.id && l.teacher_profile_id === user.id) ?? null;
+  }, [selectedEvent, roleFamily, user?.id, lessons]);
+
   const renderCalendarView = () => (
     <LessonList
       lessons={listLessons}
@@ -198,6 +210,8 @@ export function CalendarPage() {
             }
           : undefined
       }
+      teacherAttendanceSourceRows={teacherAttendanceSourceRows}
+      onTeacherAttendanceSaved={reloadLessons}
       onLessonClick={
         isLearnerHousehold
           ? undefined
@@ -385,6 +399,8 @@ export function CalendarPage() {
           event={selectedEvent}
           uiStatus={eventStatuses[selectedEvent.id] ?? selectedEvent.status}
           onClose={() => setSelectedEvent(null)}
+          attendanceRow={selectedLessonAttendanceRow}
+          onAttendanceSaved={reloadLessons}
         />
       )}
     </div>
@@ -788,10 +804,14 @@ function EventDetailsModal({
   event,
   uiStatus,
   onClose,
+  attendanceRow,
+  onAttendanceSaved,
 }: {
   event: CalendarEventDetails;
   uiStatus: CalendarEventUiStatus;
   onClose: () => void;
+  attendanceRow: DashboardLessonRow | null;
+  onAttendanceSaved?: () => void | Promise<void>;
 }) {
   const lessonEnd = new Date(event.endsAtIso);
   const lessonEndedByClock = lessonEnd.getTime() < Date.now();
@@ -933,7 +953,17 @@ function EventDetailsModal({
           ) : null}
         </div>
 
-        <div className="p-6 border-t border-gray-200 bg-gray-50/70">
+        <div className="p-6 border-t border-gray-200 bg-gray-50/70 space-y-3">
+          {attendanceRow ? (
+            <TeacherLessonAttendanceTrigger
+              row={attendanceRow}
+              variant="default"
+              onSaved={async () => {
+                await onAttendanceSaved?.();
+                onClose();
+              }}
+            />
+          ) : null}
           <button
             type="button"
             onClick={onClose}

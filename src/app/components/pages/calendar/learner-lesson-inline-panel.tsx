@@ -1,3 +1,5 @@
+import { createPortal } from 'react-dom';
+import { useState } from 'react';
 import { X, Clock, Video, MapPin, FileText } from 'lucide-react';
 import type { DashboardLessonRow } from '@/app/dashboard/lessonTypes';
 import type { CalendarEventUiStatus } from '@/app/dashboard/calendarLessonAdapters';
@@ -38,6 +40,18 @@ function badgeClass(status: CalendarEventUiStatus) {
   }
 }
 
+function sanitizeNotesHtml(html: string): string {
+  if (!html.trim()) return '';
+  if (typeof window === 'undefined') return html;
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  for (const a of Array.from(doc.querySelectorAll('a'))) {
+    const href = (a.getAttribute('href') || '').trim();
+    if (!href || /^javascript:/i.test(href)) a.replaceWith(doc.createTextNode(a.textContent || ''));
+  }
+  return doc.body.innerHTML.trim();
+}
+
 export function LearnerLessonInlinePanel({
   row,
   actorProfileId,
@@ -48,10 +62,20 @@ export function LearnerLessonInlinePanel({
   onLessonDbStatusUpdated,
   onLessonsReload,
 }: Props) {
+  const [notesOpen, setNotesOpen] = useState(false);
   const title = lessonPrimaryLabel(row);
   const teacher = lessonTeacherDisplayName(row);
   const student = lessonStudentDisplayLabel(row);
   const isVirtual = row.modality?.toLowerCase() === 'virtual';
+  const isPastLesson = new Date(row.ends_at).getTime() < Date.now();
+  const rowAny = row as DashboardLessonRow & {
+    recording_url?: string | null;
+    nml_video_url?: string | null;
+    zoom_recording_url?: string | null;
+  };
+  const recordingUrl =
+    rowAny.recording_url || rowAny.nml_video_url || rowAny.zoom_recording_url || row.meeting_url || row.teacher_meeting_url;
+  const hasRecording = Boolean(recordingUrl);
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
@@ -158,7 +182,75 @@ export function LearnerLessonInlinePanel({
           onLessonDbStatusUpdated={onLessonDbStatusUpdated}
           onLessonsReload={onLessonsReload}
         />
+        {isPastLesson ? (
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => setNotesOpen(true)}
+              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Lesson Notes
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (recordingUrl) window.open(recordingUrl, '_blank', 'noopener,noreferrer');
+              }}
+              disabled={!hasRecording}
+              title={hasRecording ? 'Open lesson recording' : 'Recording not available yet'}
+              className={`inline-flex items-center justify-center rounded-lg border px-3 py-1.5 text-xs font-medium ${
+                hasRecording
+                  ? 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                  : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
+              }`}
+            >
+              View Recording
+            </button>
+          </div>
+        ) : null}
       </div>
+      {notesOpen
+        ? createPortal(
+            <div className="fixed inset-0 z-[520] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-[2px]">
+              <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200/80 bg-white shadow-2xl">
+                <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-100 bg-white px-5 py-4">
+                  <h2 className="text-lg font-semibold text-slate-900">Lesson Notes</h2>
+                  <button
+                    type="button"
+                    onClick={() => setNotesOpen(false)}
+                    className="rounded-full p-2 text-slate-500 hover:bg-slate-100"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="space-y-4 p-5">
+                  {row.lesson_notes?.notes ? (
+                    <div
+                      className="text-sm text-slate-800 [&_a]:cursor-pointer [&_a]:font-medium [&_a]:text-sky-700 [&_a]:underline [&_a]:underline-offset-2"
+                      dangerouslySetInnerHTML={{ __html: sanitizeNotesHtml(row.lesson_notes.notes) }}
+                    />
+                  ) : null}
+                  {row.lesson_notes?.assignments?.length ? (
+                    <ul className="space-y-2">
+                      {row.lesson_notes.assignments.map((a) => (
+                        <li key={a.id} className="rounded-lg border border-violet-100 bg-violet-50/40 p-3 text-sm text-slate-800">
+                          <p className="font-medium">{a.title || 'Untitled assignment'}</p>
+                          {a.description ? <p className="mt-1 text-slate-600">{a.description}</p> : null}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {!row.lesson_notes?.notes &&
+                  !row.lesson_notes?.assignments?.length &&
+                  !row.lesson_notes?.reference_resources?.length ? (
+                    <p className="text-sm text-slate-500">No lesson notes were uploaded for this lesson yet.</p>
+                  ) : null}
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }

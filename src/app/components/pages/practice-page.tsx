@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import { useRole } from '../../context/role-context';
 import { useState, useRef, useEffect } from 'react';
+import { useDashboardLessons } from '@/app/dashboard/hooks/useDashboardLessons';
+import { formatLessonDate } from '@/lib/lesson-ui-helpers';
 import { Metronome } from '../shared/practice-tools/metronome';
 import { Tuner } from '../shared/practice-tools/tuner';
 import { IntervalTrainer } from '../shared/practice-tools/interval-trainer';
@@ -78,6 +80,15 @@ function StudentPracticeView() {
   const toolsRef = useRef<HTMLDivElement>(null);
 
   const [assignments, setAssignments] = useState<Assignment[]>(mockAssignments);
+  const [showLatestNotesHistory, setShowLatestNotesHistory] = useState(false);
+  const { lessons: dashboardLessons } = useDashboardLessons();
+
+  const latestLessonWithNotes = [...dashboardLessons]
+    .filter((lesson) => {
+      const notes = lesson.lesson_notes?.notes ?? '';
+      return Boolean(notes.trim() || lesson.lesson_notes?.assignments?.length);
+    })
+    .sort((a, b) => new Date(b.starts_at).getTime() - new Date(a.starts_at).getTime())[0];
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -386,6 +397,38 @@ function StudentPracticeView() {
               ))}
             </div>
           </div>
+
+          {latestLessonWithNotes ? (
+            <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">Latest Lesson Notes</h2>
+                  <p className="text-sm text-gray-600">
+                    {formatLessonDate(latestLessonWithNotes.starts_at)} · {latestLessonWithNotes.teacher_display_name ?? 'Teacher'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowLatestNotesHistory(true)}
+                  className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  View note history
+                </button>
+              </div>
+              {latestLessonWithNotes.lesson_notes?.notes ? (
+                <p className="text-sm text-gray-700 line-clamp-4">{latestLessonWithNotes.lesson_notes.notes.replace(/<[^>]+>/g, ' ')}</p>
+              ) : null}
+              {latestLessonWithNotes.lesson_notes?.assignments?.length ? (
+                <div className="mt-3 space-y-1">
+                  {latestLessonWithNotes.lesson_notes.assignments.slice(0, 3).map((assignment) => (
+                    <p key={assignment.id} className="text-xs text-purple-700">
+                      • {assignment.title || 'Untitled assignment'} (Difficulty {assignment.difficulty})
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         {/* Right Sidebar */}
@@ -522,6 +565,42 @@ function StudentPracticeView() {
       {/* Info Modal */}
       {showInfoModal && (
         <InfoModal onClose={() => setShowInfoModal(false)} />
+      )}
+
+      {showLatestNotesHistory && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Lesson Note History</h2>
+                <p className="text-sm text-gray-600">Recent lesson notes and assignments.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLatestNotesHistory(false)}
+                className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Close
+              </button>
+            </div>
+            <div className="space-y-3">
+              {dashboardLessons
+                .filter((lesson) => lesson.lesson_notes?.notes || lesson.lesson_notes?.assignments?.length)
+                .sort((a, b) => new Date(b.starts_at).getTime() - new Date(a.starts_at).getTime())
+                .slice(0, 5)
+                .map((lesson) => (
+                  <article key={lesson.id} className="rounded-lg border border-gray-200 p-3">
+                    <p className="text-xs text-gray-500">
+                      {formatLessonDate(lesson.starts_at)} · {lesson.teacher_display_name ?? 'Teacher'}
+                    </p>
+                    {lesson.lesson_notes?.notes ? (
+                      <p className="mt-1 text-sm text-gray-700 line-clamp-3">{lesson.lesson_notes.notes.replace(/<[^>]+>/g, ' ')}</p>
+                    ) : null}
+                  </article>
+                ))}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Log Practice Modal */}

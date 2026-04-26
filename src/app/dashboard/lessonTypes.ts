@@ -1,4 +1,5 @@
 import type { LessonParticipantJoin } from './lessonJoinParsing';
+import type { LessonCompletionOutcome, LessonNotesRecord } from './lessonCompletionTypes';
 
 /** Row shape for `public.lessons` selects used on dashboards (RLS-scoped). */
 export type DashboardLessonRow = {
@@ -11,6 +12,10 @@ export type DashboardLessonRow = {
   location: string | null;
   notes: string | null;
   focus: string | null;
+  outcome: LessonCompletionOutcome | null;
+  lesson_notes: LessonNotesRecord;
+  /** From embedded `teachers.profile_id` when RLS allows. */
+  teacher_profile_id: string | null;
   /** From embedded `teachers → profiles` when RLS allows. */
   teacher_display_name: string | null;
   /** From embedded `lesson_participants → students → profiles` when RLS allows. */
